@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
       - name: Verify trusted evaluator and build inert site
         run: npm run check
       - uses: actions/configure-pages@v6

@@ -22,7 +22,7 @@ LightBenchmarkは、小規模なAIモデルを「見て面白い」「成功・�
 
 ## 必要環境
 
-- Node.js 22以上
+- Node.js 24以上
 - 追加packageなし
 
 ```powershell
