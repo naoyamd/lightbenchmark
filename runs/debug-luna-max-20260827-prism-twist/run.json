@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-max-20260827-prism-twist",
+  "cohortId": "debug-codex-agent-20260827",
+  "taskId": "prism-twist",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null,
+      "verification": "ephemeral session log was not retained"
+    }
+  },
+  "execution": {
+    "startedAt": null,
+    "endedAt": "2026-08-27T15:02:05.496Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": null,
+    "agentSteps": null,
+    "toolCalls": null,
+    "terminationReason": "operator-debug-abort",
+    "lane": "assisted",
+    "harness": "Codex CLI agent; manual launcher; ephemeral JSONL was not retained",
+    "isolation": "same-host-debug"
+  },
+  "usage": {
+    "root": { "inputTokens": null, "outputTokens": null, "cachedTokens": null, "reasoningTokens": null, "totalTokens": null, "cost": null, "currency": null, "costStatus": "unavailable" },
+    "subagents": { "inputTokens": 0, "outputTokens": 0, "cachedTokens": 0, "reasoningTokens": 0, "totalTokens": 0, "cost": 0, "currency": null, "costStatus": "none" },
+    "total": { "inputTokens": null, "outputTokens": null, "cachedTokens": null, "reasoningTokens": null, "totalTokens": null, "cost": null, "currency": null, "costStatus": "unavailable" }
+  },
+  "agents": { "spawned": 0, "completed": 0, "failed": 0, "maxConcurrent": 0, "items": [] },
+  "interventions": [
+    { "kind": "operator-stop", "detail": "Stopped after about six minutes to prioritize benchmark harness debugging; this was not a benchmark timeout." }
+  ],
+  "artifacts": [],
+  "versions": { "benchmark": "1.0.0", "prompt": "CUBE-1.0", "runner": "manual codex-cli", "starter": "public-tests.mjs" },
+  "hashes": {
+    "prompt": "92b3fe4e70a0618e8b452c075ae2d49db4a1438667292ee98fbe5a8eabd7f9ac",
+    "starter": "3faaf37fc1772f3294151fa8e5c7b0a6b209e0aec5dcf1bfdb0b366fc440634a"
+  },
+  "evaluation": {
+    "status": "debug-aborted",
+    "observedDate": "2026-08-28 Asia/Tokyo",
+    "submissionFiles": [],
+    "publicTests": { "pass": false, "reason": "No candidate module was created" },
+    "headline": { "pass": false, "reason": "No 3D puzzle artifact was created" },
+    "staleOutputExcluded": true,
+    "staleOutputReason": "final.txt belonged to an earlier read-only launch attempt because the workspace was reused",
+    "measurementFailures": ["start time missing", "JSONL and token usage lost because the session was ephemeral", "reused workspace allowed stale final.txt contamination"]
+  }
+}

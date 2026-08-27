@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-max-20260827-lander-pop",
+  "cohortId": "debug-codex-agent-20260827",
+  "taskId": "lander-pop",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null,
+      "verification": "ephemeral session log was not retained"
+    }
+  },
+  "execution": {
+    "startedAt": null,
+    "endedAt": "2026-08-27T15:02:05.496Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": null,
+    "agentSteps": null,
+    "toolCalls": null,
+    "terminationReason": "operator-debug-abort",
+    "lane": "assisted",
+    "harness": "Codex CLI agent; manual launcher; ephemeral JSONL was not retained",
+    "isolation": "same-host-debug"
+  },
+  "usage": {
+    "root": { "inputTokens": null, "outputTokens": null, "cachedTokens": null, "reasoningTokens": null, "totalTokens": null, "cost": null, "currency": null, "costStatus": "unavailable" },
+    "subagents": { "inputTokens": 0, "outputTokens": 0, "cachedTokens": 0, "reasoningTokens": 0, "totalTokens": 0, "cost": 0, "currency": null, "costStatus": "none" },
+    "total": { "inputTokens": null, "outputTokens": null, "cachedTokens": null, "reasoningTokens": null, "totalTokens": null, "cost": null, "currency": null, "costStatus": "unavailable" }
+  },
+  "agents": { "spawned": 0, "completed": 0, "failed": 0, "maxConcurrent": 0, "items": [] },
+  "interventions": [
+    { "kind": "operator-stop", "detail": "Stopped after about six minutes to prioritize benchmark harness debugging; this was not a benchmark timeout." }
+  ],
+  "artifacts": [],
+  "versions": { "benchmark": "1.0.0", "prompt": "LANDER-1.0", "runner": "manual codex-cli", "starter": "public-tests.mjs", "fixture": "debug fixture; invalid for blind scoring" },
+  "hashes": {
+    "prompt": "63b1fffad49bccfb904d3cedb08005dd643e8a9b32fdf8a337f3ac3f5aa62d0d",
+    "starter": "fbcc4835e535673e5fb5bee2ba10d71cd9336ec298d1e100766f67801a3e54ff",
+    "candidateSim": "5d29ac9d82e00cb66ccb44ec9c852c75e70c834591df540d5e293467ea918805",
+    "candidateController": "ec018ac82ec752e8fa9d91f4d154cc4440a4da9a1a0b5b60cb18f70a652b16b7",
+    "debugFixture": "3104ae9d9734f2b481e8af1fa42c3ca380049e58be90cb10241439595165eb74"
+  },
+  "evaluation": {
+    "status": "debug-aborted",
+    "observedDate": "2026-08-28 Asia/Tokyo",
+    "submissionFiles": ["controller.mjs", "sim.mjs"],
+    "publicTests": { "pass": true },
+    "independentEvaluator": {
+      "pass": false,
+      "logicPass": false,
+      "robustnessPass": true,
+      "headlinePass": false,
+      "landings": ["flying", "hard-crash", "landed", "landed", "landed"]
+    },
+    "headline": { "pass": false, "reason": "3/5 oracle-sim landings and no index.html visual" },
+    "comparabilityBlockers": ["The debug fixture was generated on the same readable host and its values existed in repository source during the run, so it was not blind."],
+    "measurementFailures": ["start time missing", "JSONL and token usage lost because the session was ephemeral"]
+  }
+}

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101225">
+    <title>LightBenchmark Results</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="glow glow-pink" aria-hidden="true"></div>
+    <div class="glow glow-cyan" aria-hidden="true"></div>
+    <main class="shell">
+      <header class="hero">
+        <p class="eyebrow">LIGHTBENCHMARK / RESULTS</p>
+        <h1>走った結果を、<span>楽しく比較。</span></h1>
+        <p class="lede">モデルとエージェントの実行メタデータを、ひと目でチェックするダッシュボード。</p>
+      </header>
+
+      <section class="task-overview" aria-labelledby="task-overview-title">
+        <div class="section-heading">
+          <h2 id="task-overview-title">4つの課題</h2>
+          <p class="note">n=1 showcase · 正式runとdebug runを分離 · 総合点なし</p>
+        </div>
+        <div class="task-grid">
+          <a class="task-card task-chat" href="./prompts/japanese-chat.prompt.html"><strong>日本語チャット</strong><span>閉本知識 → 資料後の訂正</span><small>完成版 prompt ↗</small></a>
+          <a class="task-card task-cascade" href="./prompts/color-cascade-18.prompt.html"><strong>Color Cascade 18</strong><span>18連鎖の全消しパズル</span><small>完成版 prompt ↗</small></a>
+          <a class="task-card task-twist" href="./prompts/prism-twist.prompt.html"><strong>Prism Twist 3×3</strong><span>実回転で完成する立体パズル</span><small>完成版 prompt ↗</small></a>
+          <a class="task-card task-lander" href="./prompts/lander-pop.prompt.html"><strong>Lander Pop</strong><span>観測値で自動制御するtoy simulation</span><small>完成版 prompt ↗</small></a>
+        </div>
+      </section>
+
+      <section class="controls" aria-label="結果を絞り込む">
+        <label>
+          タスク
+          <select id="task-filter">
+            <option value="">すべてのタスク</option>
+          </select>
+        </label>
+        <label>
+          ステータス
+          <select id="status-filter">
+            <option value="">すべてのステータス</option>
+          </select>
+        </label>
+        <p id="result-count" class="result-count" aria-live="polite"></p>
+      </section>
+
+      <section id="results" class="results" aria-live="polite">
+        <div class="loading">結果を読み込み中…</div>
+      </section>
+    </main>
+
+    <dialog id="detail-dialog" class="detail-dialog" aria-labelledby="detail-title">
+      <button id="dialog-close" class="dialog-close" type="button" aria-label="詳細を閉じる">×</button>
+      <div id="detail-content"></div>
+    </dialog>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

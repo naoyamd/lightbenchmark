@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-max-20260827-color-cascade-18",
+  "cohortId": "debug-codex-agent-20260827",
+  "taskId": "color-cascade-18",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null,
+      "verification": "ephemeral session log was not retained"
+    }
+  },
+  "execution": {
+    "startedAt": null,
+    "endedAt": "2026-08-27T15:02:05.496Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": null,
+    "agentSteps": null,
+    "toolCalls": null,
+    "terminationReason": "operator-debug-abort",
+    "lane": "assisted",
+    "harness": "Codex CLI agent; manual launcher; ephemeral JSONL was not retained",
+    "isolation": "same-host-debug"
+  },
+  "usage": {
+    "root": { "inputTokens": null, "outputTokens": null, "cachedTokens": null, "reasoningTokens": null, "totalTokens": null, "cost": null, "currency": null, "costStatus": "unavailable" },
+    "subagents": { "inputTokens": 0, "outputTokens": 0, "cachedTokens": 0, "reasoningTokens": 0, "totalTokens": 0, "cost": 0, "currency": null, "costStatus": "none" },
+    "total": { "inputTokens": null, "outputTokens": null, "cachedTokens": null, "reasoningTokens": null, "totalTokens": null, "cost": null, "currency": null, "costStatus": "unavailable" }
+  },
+  "agents": { "spawned": 0, "completed": 0, "failed": 0, "maxConcurrent": 0, "items": [] },
+  "interventions": [
+    { "kind": "operator-stop", "detail": "Stopped after about six minutes to prioritize benchmark harness debugging; this was not a benchmark timeout." }
+  ],
+  "artifacts": [],
+  "versions": { "benchmark": "1.0.0", "prompt": "PUYO-1.0", "runner": "manual codex-cli", "starter": "public-tests.mjs" },
+  "hashes": {
+    "prompt": "c14fc0dac0acfb124fd8fd7726f30a317f23c2a7ab61a022d15f200201d23f5d",
+    "starter": "6d805a0d80d6623999edd8ff5b803f75aabb7581bf5a9fa519cb76865509de9b",
+    "candidateEngine": "0fdd630d93858bd85c19edd715cf3ad1ad07ddff1a7ddadc88f9fbabb30046d9"
+  },
+  "evaluation": {
+    "status": "debug-aborted",
+    "observedDate": "2026-08-28 Asia/Tokyo",
+    "submissionFiles": ["engine.mjs"],
+    "publicTests": { "pass": false, "reason": "submission/site/challenge.json was not created" },
+    "headline": { "pass": false, "reason": "No playable UI and no 18-chain all-clear challenge artifact" },
+    "measurementFailures": ["start time missing", "JSONL and token usage lost because the session was ephemeral"]
+  }
+}

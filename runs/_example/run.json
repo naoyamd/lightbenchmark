@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "runId": "_example-lightbenchmark",
+  "cohortId": "demo-cohort",
+  "taskId": "demo-task",
+  "runKind": "official",
+  "status": "pass",
+  "demo": true,
+  "model": {
+    "displayName": "Demo Spark",
+    "provider": "LightBenchmark",
+    "modelId": "demo-spark-1",
+    "revision": "demo-2026-08",
+    "reasoning": "medium"
+  },
+  "execution": {
+    "startedAt": "2026-08-27T09:00:00+09:00",
+    "endedAt": "2026-08-27T09:00:08+09:00",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 8120,
+    "agentSteps": 6,
+    "toolCalls": 3,
+    "terminationReason": "completed",
+    "lane": "autonomous",
+    "harness": "demo-runner",
+    "isolation": "isolated-candidate-workspace"
+  },
+  "usage": {
+    "root": {
+      "inputTokens": 1240,
+      "outputTokens": 820,
+      "cachedTokens": null,
+      "reasoningTokens": 310,
+      "totalTokens": 2060,
+      "cost": 0.012,
+      "currency": "USD",
+      "costStatus": "estimated"
+    },
+    "subagents": {
+      "inputTokens": 480,
+      "outputTokens": 260,
+      "cachedTokens": 90,
+      "reasoningTokens": null,
+      "totalTokens": 740,
+      "cost": null,
+      "currency": "USD",
+      "costStatus": "unavailable"
+    },
+    "total": {
+      "inputTokens": 1720,
+      "outputTokens": 1080,
+      "cachedTokens": 90,
+      "reasoningTokens": 310,
+      "totalTokens": 2800,
+      "cost": 0.012,
+      "currency": "USD",
+      "costStatus": "estimated"
+    }
+  },
+  "agents": {
+    "spawned": 1,
+    "completed": 1,
+    "failed": 0,
+    "maxConcurrent": 1,
+    "items": [
+      {
+        "role": "researcher",
+        "modelId": "demo-spark-1-mini",
+        "tokens": 740,
+        "durationMs": 2450,
+        "status": "completed"
+      }
+    ]
+  },
+  "interventions": [],
+  "artifacts": [],
+  "versions": {
+    "benchmark": "0.1.0",
+    "runner": "demo"
+  },
+  "hashes": {
+    "prompt": "demo-prompt-hash",
+    "input": "demo-input-hash"
+  },
+  "evaluation": {
+    "status": "demo",
+    "notes": "このレコードは表示確認用のデモです。"
+  }
+}

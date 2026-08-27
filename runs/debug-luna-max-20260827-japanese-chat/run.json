@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-max-20260827-japanese-chat",
+  "cohortId": "debug-codex-agent-20260827",
+  "taskId": "japanese-chat",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": "max"
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-27T14:58:12.708Z",
+    "endedAt": "2026-08-27T15:02:30.129Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 257421,
+    "agentSteps": 2,
+    "toolCalls": 0,
+    "terminationReason": "completed-debug-harness",
+    "lane": "assisted",
+    "harness": "Codex CLI 0.146.1 agent session; extra Codex instructions loaded; not raw API",
+    "isolation": "same-host-debug"
+  },
+  "usage": {
+    "root": {
+      "inputTokens": 38722,
+      "outputTokens": 4669,
+      "cachedTokens": 16128,
+      "reasoningTokens": 4128,
+      "totalTokens": 43391,
+      "cost": 0.01044416,
+      "currency": "USD",
+      "costStatus": "estimated-api-equivalent"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": "USD",
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": 38722,
+      "outputTokens": 4669,
+      "cachedTokens": 16128,
+      "reasoningTokens": 4128,
+      "totalTokens": 43391,
+      "cost": 0.01044416,
+      "currency": "USD",
+      "costStatus": "estimated-api-equivalent"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [
+    {
+      "kind": "manual-harness",
+      "detail": "Turn 2 was resumed manually with the frozen prompt; model outputs were not edited."
+    }
+  ],
+  "artifacts": [],
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "JP-1.0",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "chat.mjs"
+  },
+  "hashes": {
+    "prompt": "47e11d62fbba12e1fb1948b0655d449e5003521f4530308033f86a91e705e73a",
+    "evaluator": "9bf967e38f359122a99fc9959c9f5799ef31302fa8c303b870e28076950753ff",
+    "turn1Output": "d9fd85cb017022f6bfc7ea8579c948f84d7ffb7243e8c5c3e2febb3b2436e69b",
+    "turn2Output": "9a3b951b175dcc0919f01dfb058a594c4840e8b8b21d9f7af58ea89d51f420b8"
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "deterministicChecks": {
+      "turn1": {
+        "pass": true,
+        "characters": 290,
+        "emoji": 3
+      },
+      "turn2": {
+        "pass": true,
+        "characters": 245,
+        "emoji": 2,
+        "factIds": ["F1", "F2", "F3", "F4", "F5", "F6"]
+      }
+    },
+    "outputs": {
+      "turn1": "糸島は福岡市の中じゃなくて、福岡県西部にある糸島市だよ〜。福岡市から近いけど、ちゃんと別の自治体！🌈 海はもちろん、山や田園、夕景など、のんびり自然を感じられるのが魅力。食も強くて、地元の魚介、野菜、果物、カフェやベーカリー巡りが楽しい🍓 車なしでも、電車やバスで海沿い・観光地を一部回れるけど、場所同士が離れていて本数も限られるから、レンタサイクルやタクシーを組み合わせると安心。海以外にも、直売所で買い物したり、工房・神社・温泉で過ごしたり、景色を見ながらドライブしたりできるよ✨ 行く前に知っておくとよい現実的な注意は、行きたい店や施設の営業日・交通手段を先に確認すること！",
+      "turn2": "改稿:\nまず訂正！糸島は福岡市の中ではなく、福岡市の西側に隣接する別の市・糸島市だよ。🌈 北は玄界灘、南は脊振山系で、海だけじゃなく山の自然も楽しめるのが魅力。農産物・畜産物・海産物が豊富で、「糸島ブランド」として評価されてるのも強い！JR筑肥線で天神から筑前前原までは約30分。白糸の滝や桜井二見ヶ浦の夫婦岩を見たり、平原遺跡で伊都国の歴史に触れたりできるよ✨ 車なしでも不可能ではないけど、行く前に知っておくとよい現実的な注意は、市内の観光地を全部、公共交通だけで容易に回れるわけではないこと！\n\n自己点検:\n訂正・弱めた点: 「福岡市の中」を明確に訂正し、車なしの断定と交通の万能感を弱め、根拠のないカフェ等を削除。\n使用Fact ID: F1,F2,F3,F4,F5,F6"
+    },
+    "comparabilityBlockers": [
+      "Codex agent base instructions and installed skills were present in addition to the frozen benchmark messages.",
+      "Turn 1 used a read-only sandbox while the resumed turn used workspace-write.",
+      "This is not the raw, tools-omitted API lane required for an official closed-book score."
+    ]
+  }
+}
