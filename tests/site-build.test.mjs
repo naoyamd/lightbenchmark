@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -93,12 +93,98 @@ describe('site build', () => {
     const app = await readFile(path.join(root, 'dist', 'app.js'), 'utf8');
     for (const label of ['モデル', '合計トークン', 'サブエージェント', '実行時間', 'コスト']) assert.match(app, new RegExp(label));
     assert.match(app, /artifactGallery/);
+    assert.match(app, /ビジュアル未収録/);
+    assert.match(app, /evaluation\?\.showcase\?\.reason/);
+    assert.match(output, /"showcase": null/);
     assert.match(await readFile(path.join(root, 'dist', 'artifacts', 'run-001', 'artifacts', 'demo.png'), 'utf8'), /not-a-real-png/);
     assert.equal(JSON.parse(output)[0].artifacts[0].url, './artifacts/run-001/artifacts/demo.png');
     assert.match(output, /"cachedTokens": null/);
     assert.doesNotMatch(output, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     await buildSite({ rootDir: root });
     assert.equal(await readFile(path.join(root, 'dist', 'data', 'runs.json'), 'utf8'), output);
+  });
+
+  it('builds the finalizer live shape and two-turn chat showcase shape', async () => {
+    const root = await workspace();
+    const liveRun = clone(sampleRun);
+    liveRun.showcase = { kind: 'live', entry: 'showcase/index.html', protocol: 'LIGHTBENCH-1', scenario: 'public-v1' };
+    await mkdir(path.join(root, 'runs', 'first', 'showcase'), { recursive: true });
+    await writeFile(path.join(root, 'runs', 'first', 'showcase', 'index.html'), '<!doctype html><html><head><title>Live</title></head><body>ok</body></html>');
+    await writeFile(path.join(root, 'runs', 'first', 'showcase', 'nested.html'), '<!doctype html><script>fetch("https://example.com")</script>');
+    await writeFile(path.join(root, 'runs', 'first', 'showcase', 'app.js'), 'window.__LIGHTBENCH__ = { reset() {}, runChallenge() {} };');
+    await writeRun(root, 'first', liveRun);
+
+    const chatRun = clone(sampleRun);
+    chatRun.runId = 'run-002';
+    chatRun.showcase = {
+      kind: 'chat',
+      turns: [
+        { label: '閉本回答', path: 'showcase/turn-1.txt' },
+        { label: '訂正回答', path: 'showcase/turn-2.txt' },
+      ],
+    };
+    await mkdir(path.join(root, 'runs', 'second'), { recursive: true });
+    await mkdir(path.join(root, 'runs', 'second', 'showcase'), { recursive: true });
+    await writeFile(path.join(root, 'runs', 'second', 'showcase', 'turn-1.txt'), '<script>alert(1)</script>\n返答');
+    await writeFile(path.join(root, 'runs', 'second', 'showcase', 'turn-2.txt'), '訂正しました');
+    await writeRun(root, 'second', chatRun);
+
+    await buildSite({ rootDir: root });
+    const output = JSON.parse(await readFile(path.join(root, 'dist', 'data', 'runs.json'), 'utf8'));
+    const builtLive = await readFile(path.join(root, 'dist', 'showcases', 'run-001', 'showcase', 'index.html'), 'utf8');
+    assert.match(builtLive, /Content-Security-Policy/);
+    assert.match(builtLive, /default-src 'none'/);
+    assert.match(builtLive, /connect-src __LIGHTBENCH_ASSET_ROOT_9b41c8__/);
+    assert.match(builtLive, /data-lightbenchmark-base/);
+    for (const directive of ["worker-src 'none'", "frame-src 'none'", "form-action 'none'", "object-src 'none'"]) assert.match(builtLive, new RegExp(directive));
+    assert.match(builtLive, /LIGHTBENCH-1/);
+    assert.match(builtLive, /event\.source !== window\.parent/);
+    assert.match(builtLive, /data\.nonce !== nonce/);
+    const app = await readFile(path.join(root, 'dist', 'app.js'), 'utf8');
+    assert.match(app, /setAttribute\('sandbox', 'allow-scripts'\)/);
+    assert.match(app, /setAttribute\('referrerpolicy', 'no-referrer'\)/);
+    assert.match(app, /event\.source !== frame\.contentWindow/);
+    assert.match(app, /data\.nonce !== session\.nonce/);
+    assert.match(app, /frame\.srcdoc = source\.replaceAll/);
+    assert.match(app, /await fetch\(url/);
+    assert.doesNotMatch(app, /allow-same-origin/);
+    assert.match(app, /再演する/);
+    assert.match(app, /停止する/);
+    assert.match(app, /60_000/);
+    assert.match(app, /部分達成/);
+    assert.match(app, /escapeHtml\(typeof turn\.text/);
+    assert.equal(output[0].showcase.url, './showcases/run-001/showcase/index.html');
+    assert.deepEqual(output[1].showcase.turns.map(turn => turn.label), ['閉本回答', '訂正回答']);
+    assert.equal(output[1].showcase.turns[0].text, '<script>alert(1)</script>\n返答');
+    assert.equal(output[1].showcase.turns[1].text, '訂正しました');
+    assert.equal(output[1].showcase.urls.length, 2);
+    const nested = await readFile(path.join(root, 'dist', 'showcases', 'run-001', 'showcase', 'nested.html'), 'utf8');
+    assert.match(nested, /Content-Security-Policy/);
+    assert.doesNotMatch(nested, /LIGHTBENCH-1/);
+    assert.equal(await readFile(path.join(root, 'dist', 'showcases', 'run-002', 'showcase', 'turn-2.txt'), 'utf8'), '訂正しました');
+  });
+
+  it('rejects unsafe live showcase paths, files, size, markup, and symlinks', async () => {
+    const traversal = clone(sampleRun);
+    traversal.showcase = { kind: 'live', entry: '../index.html' };
+    assert.throws(() => validateRun(traversal), /relative paths/);
+
+    for (const [name, setup, expected] of [
+      ['base', dir => writeFile(path.join(dir, 'index.html'), '<base href="/">'), /<base>/],
+      ['csp', dir => writeFile(path.join(dir, 'index.html'), '<meta http-equiv="Content-Security-Policy" content="default-src *">'), /existing Content-Security-Policy/],
+      ['extension', async dir => { await writeFile(path.join(dir, 'index.html'), 'ok'); await writeFile(path.join(dir, 'bad.png'), 'nope'); }, /live showcase files/],
+      ['size', async dir => { await writeFile(path.join(dir, 'index.html'), 'ok'); await writeFile(path.join(dir, 'huge.js'), 'x'.repeat(2 * 1024 * 1024)); }, /exceeds 2 MiB/],
+      ['symlink', async dir => { await writeFile(path.join(dir, 'index.html'), 'ok'); await mkdir(path.join(dir, 'target')); await writeFile(path.join(dir, 'target', 'app.js'), 'ok'); await symlink(path.join(dir, 'target'), path.join(dir, 'link'), 'junction'); }, /symlinks/],
+    ]) {
+      const root = await workspace();
+      const run = clone(sampleRun);
+      run.showcase = { kind: 'live', entry: 'showcase/index.html' };
+      const dir = path.join(root, 'runs', name, 'showcase');
+      await mkdir(dir, { recursive: true });
+      await setup(dir);
+      await writeRun(root, name, run);
+      await assert.rejects(() => buildSite({ rootDir: root }), expected);
+    }
   });
 });
 
@@ -157,6 +243,12 @@ describe('run schema', () => {
     run.execution.startedAt = null;
     run.execution.durationMs = null;
     assert.doesNotThrow(() => validateRun(run));
+
+    const incompleteAgents = clone(run);
+    incompleteAgents.agents.completed = null;
+    incompleteAgents.agents.failed = null;
+    incompleteAgents.agents.maxConcurrent = null;
+    assert.doesNotThrow(() => validateRun(incompleteAgents));
 
     const unisolatedOfficial = clone(sampleRun);
     unisolatedOfficial.execution.isolation = 'same-host-debug';

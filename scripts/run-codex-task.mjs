@@ -1,9 +1,34 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { lstat, readFile, readdir, writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { finished } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
 const scriptFile = fileURLToPath(import.meta.url);
+
+export async function createCandidateWorkspace(source) {
+  const target = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-candidate-'));
+  try {
+    await mkdir(path.join(target, 'submission', 'site'), { recursive: true });
+    await Promise.all(['prompt.txt', 'public-tests.mjs'].map(file => cp(path.join(source, file), path.join(target, file))));
+    return target;
+  } catch (error) {
+    await rm(target, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function collectCandidateWorkspace(source, target) {
+  const sourceSite = path.join(source, 'submission', 'site');
+  const targetSite = path.join(target, 'submission', 'site');
+  for (const entry of await readdir(sourceSite)) {
+    await cp(path.join(sourceSite, entry), path.join(targetSite, entry), { recursive: true, errorOnExist: true, force: false });
+  }
+  const final = path.join(source, 'final.txt');
+  if (await lstat(final).catch(() => null)) await cp(final, path.join(target, 'final.txt'), { errorOnExist: true, force: false });
+}
 
 export function emptyCodexStats() {
   return { threadId: null, itemCount: 0, toolCalls: 0, subagents: 0, usage: null, malformedLines: 0 };
@@ -19,28 +44,59 @@ export function consumeCodexLine(stats, line) {
   stats.itemCount += 1;
   const type = event.item?.type;
   if (type && type !== 'agent_message' && type !== 'reasoning') stats.toolCalls += 1;
-  if (type === 'collaboration_tool_call' && /spawn_agent/u.test(JSON.stringify(event.item))) stats.subagents += 1;
+  if ((type === 'collab_tool_call' || type === 'collaboration_tool_call')
+    && /spawn_agent/u.test(JSON.stringify(event.item))) stats.subagents += 1;
 }
 
-// ponytail: in-memory capture is enough for the 20k-token cap; stream-parse if that cap grows materially.
-export function runCapturedProcess({ executable, args, cwd, input, timeoutMs }) {
+function terminateProcessTree(child) {
+  if (!child.pid) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+    return;
+  }
+  try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+}
+
+export function runCapturedProcess({ executable, args, cwd, input, timeoutMs, stdoutFile, stderrFile, onStdoutLine, startedAt = new Date() }) {
   return new Promise((resolve, reject) => {
-    const startedAt = new Date();
-    const child = spawn(executable, args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = '';
+    const child = spawn(executable, args, { cwd, detached: process.platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const stdoutSink = stdoutFile ? createWriteStream(stdoutFile, { flags: 'a' }) : null;
+    const stderrSink = stderrFile ? createWriteStream(stderrFile, { flags: 'a' }) : null;
+    let stdout = stdoutFile ? null : '';
     let stderr = '';
+    let lineBuffer = '';
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGTERM');
+      terminateProcessTree(child);
     }, timeoutMs);
-    child.once('error', error => { clearTimeout(timer); reject(error); });
+    child.once('error', error => {
+      clearTimeout(timer);
+      stdoutSink?.destroy();
+      stderrSink?.destroy();
+      reject(error);
+    });
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', chunk => { stdout += chunk; });
-    child.stderr.on('data', chunk => { stderr += chunk; });
-    child.once('close', (exitCode, signal) => {
+    child.stdout.on('data', chunk => {
+      if (stdout === null) stdoutSink.write(chunk);
+      else stdout += chunk;
+      if (!onStdoutLine) return;
+      lineBuffer += chunk;
+      const lines = lineBuffer.split(/\r?\n/u);
+      lineBuffer = lines.pop() ?? '';
+      for (const line of lines) onStdoutLine(line);
+    });
+    child.stderr.on('data', chunk => {
+      stderr = `${stderr}${chunk}`.slice(-65_536);
+      stderrSink?.write(chunk);
+    });
+    child.once('close', async (exitCode, signal) => {
       clearTimeout(timer);
+      if (lineBuffer) onStdoutLine?.(lineBuffer);
+      stdoutSink?.end();
+      stderrSink?.end();
+      await Promise.all([stdoutSink && finished(stdoutSink), stderrSink && finished(stderrSink)].filter(Boolean)).catch(reject);
       const endedAt = new Date();
       resolve({ startedAt, endedAt, durationMs: endedAt - startedAt, exitCode, signal, timedOut, stdout, stderr });
     });
@@ -49,6 +105,9 @@ export function runCapturedProcess({ executable, args, cwd, input, timeoutMs }) 
 }
 
 export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort = 'max', timeoutMs = 720_000, executable = 'codex' }) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 720_000) {
+    throw new Error('timeoutMs must be an integer from 1 to 720000');
+  }
   const root = path.resolve(workspace);
   const stat = await lstat(root).catch(() => null);
   if (!stat?.isDirectory()) throw new Error(`workspace does not exist: ${root}`);
@@ -62,19 +121,18 @@ export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort =
   const site = path.join(root, 'submission', 'site');
   if ((await readdir(site)).length) throw new Error('submission/site must be empty before a run');
   const prompt = await readFile(path.join(root, 'prompt.txt'), 'utf8');
-  const finalFile = path.join(root, 'final.txt');
-  const args = [
-    'exec', '--json', '--model', model,
-    '-c', `model_reasoning_effort="${effort}"`,
-    '--sandbox', 'workspace-write',
-    '--output-last-message', finalFile,
-    '-',
-  ];
-  const version = spawnSync(executable, ['--version'], { encoding: 'utf8', windowsHide: true });
-  const result = await runCapturedProcess({ executable, args, cwd: root, input: prompt, timeoutMs });
+  const eventFile = path.join(root, outputFiles[0]);
+  const stderrFile = path.join(root, outputFiles[1]);
+  const metadataFile = path.join(root, outputFiles[3]);
+  const startedAt = new Date();
   const stats = emptyCodexStats();
-  for (const line of result.stdout.split(/\r?\n/u)) consumeCodexLine(stats, line);
-  const metadata = {
+  const version = spawnSync(executable, ['--version'], { encoding: 'utf8', windowsHide: true });
+  const help = spawnSync(executable, ['exec', '--help'], { encoding: 'utf8', windowsHide: true }).stdout ?? '';
+  const isolationFlags = ['--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check'].filter(flag => help.includes(flag));
+  const featureList = spawnSync(executable, ['features', 'list'], { encoding: 'utf8', windowsHide: true }).stdout ?? '';
+  const disabledFeatures = ['plugins', 'apps', 'skill_search', 'browser_use', 'computer_use', 'image_generation', 'workspace_dependencies']
+    .filter(feature => new RegExp(`^${feature}\\s`, 'mu').test(featureList));
+  const runningMetadata = {
     schemaVersion: 1,
     harness: 'codex-cli-agent',
     isolation: 'same-host-debug',
@@ -83,8 +141,67 @@ export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort =
     modelRequested: model,
     reasoningEffortRequested: effort,
     sandboxRequested: 'workspace-write',
-    networkForModelTools: false,
-    startedAt: result.startedAt.toISOString(),
+    isolationFlags,
+    disabledFeatures,
+    execPolicy: 'controlled rules ignored; on-request with auto-review',
+    networkEnforcement: 'requested-disabled; not independently verified',
+    candidateWorkspaceIsolation: 'repo-external-temporary-copy',
+    startedAt: startedAt.toISOString(),
+    endedAt: null,
+    durationMs: null,
+    terminationReason: 'running',
+    budgetEnforcement: { wallClock: 'hard', agentSteps: 'observed-only', outputTokens: 'observed-only' },
+  };
+  await Promise.all([
+    writeFile(eventFile, '', { encoding: 'utf8', flag: 'wx' }),
+    writeFile(stderrFile, '', { encoding: 'utf8', flag: 'wx' }),
+    writeFile(metadataFile, `${JSON.stringify(runningMetadata, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' }),
+  ]);
+  let result;
+  let processError;
+  let candidateRoot;
+  try {
+    candidateRoot = await createCandidateWorkspace(root);
+    const args = [
+      'exec', ...isolationFlags, ...disabledFeatures.flatMap(feature => ['--disable', feature]), '--json', '--model', model,
+      '-c', `model_reasoning_effort="${effort}"`,
+      '-c', 'approval_policy="on-request"',
+      '-c', 'approvals_reviewer="auto_review"',
+      '-c', 'sandbox_workspace_write.network_access=false',
+      '-c', 'shell_environment_policy.ignore_default_excludes=false',
+      '--sandbox', 'workspace-write',
+      '--output-last-message', path.join(candidateRoot, 'final.txt'),
+      '-',
+    ];
+    result = await runCapturedProcess({
+      executable, args, cwd: candidateRoot, input: prompt, timeoutMs, stdoutFile: eventFile, stderrFile,
+      onStdoutLine: line => consumeCodexLine(stats, line), startedAt,
+    });
+  } catch (error) {
+    processError = error;
+  }
+  try {
+    if (candidateRoot) await collectCandidateWorkspace(candidateRoot, root);
+  } catch (error) {
+    processError ??= error;
+  } finally {
+    if (candidateRoot) await rm(candidateRoot, { recursive: true, force: true });
+  }
+  if (processError) {
+    const endedAt = new Date();
+    const failedMetadata = {
+      ...runningMetadata,
+      endedAt: endedAt.toISOString(),
+      durationMs: endedAt - startedAt,
+      terminationReason: 'process-spawn-error',
+      error: processError instanceof Error ? processError.message : String(processError),
+      ...stats,
+    };
+    await writeFile(metadataFile, `${JSON.stringify(failedMetadata, null, 2)}\n`, 'utf8');
+    throw processError;
+  }
+  const metadata = {
+    ...runningMetadata,
     endedAt: result.endedAt.toISOString(),
     durationMs: result.durationMs,
     exitCode: result.exitCode,
@@ -93,11 +210,7 @@ export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort =
     terminationReason: result.timedOut ? 'timeout' : result.exitCode === 0 ? 'completed' : 'process-error',
     ...stats,
   };
-  await Promise.all([
-    writeFile(path.join(root, outputFiles[0]), result.stdout, 'utf8'),
-    writeFile(path.join(root, outputFiles[1]), result.stderr, 'utf8'),
-    writeFile(path.join(root, outputFiles[3]), `${JSON.stringify(metadata, null, 2)}\n`, 'utf8'),
-  ]);
+  await writeFile(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
   return metadata;
 }
 
@@ -114,8 +227,8 @@ function parseArgs(args) {
     else if (key === '--timeout-ms') options.timeoutMs = Number(value);
     else throw new Error(`unknown option: ${key}`);
   }
-  if (options.timeoutMs !== undefined && (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0)) {
-    throw new Error('--timeout-ms must be a positive integer');
+  if (options.timeoutMs !== undefined && (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 720_000)) {
+    throw new Error('--timeout-ms must be an integer from 1 to 720000');
   }
   return options;
 }

@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-max-live-20260830-lander-pop",
+  "cohortId": "debug-luna-max-live-20260829-fixed1",
+  "taskId": "lander-pop",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-29T15:22:40.414Z",
+    "endedAt": "2026-08-29T15:34:40.880Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720466,
+    "agentSteps": 39,
+    "toolCalls": 34,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [
+      "independent evaluator source",
+      "evaluation harness",
+      "benchmark test suite"
+    ],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720466,
+        "withinLimit": false
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 39,
+        "withinLimit": false
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "LANDER-1.1",
+    "commonPrompt": "CODE-1.1",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1"
+  },
+  "hashes": {
+    "prompt": "672fd156970b7932f2f774086d0a6a2f0aa933e10589665109e3fc317354d6b0",
+    "starter": "b361480403c0b1de0016db866be9ea128d5cd6882c0835a48a99d50bbb70a95a",
+    "candidateSite": "c47bd564965de064b136e67e0110753d8abb0f11010630f6ca8fdbbd9e033a06",
+    "evaluator": "9b7597f8d036aee2d73ca4d1b4ba30b7b8632b877d6d35a501932e99a19422b5",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。",
+      "候補がbenchmark非公開ファイルを参照しました: independent evaluator source, evaluation harness, benchmark test suite",
+      "wallClock budget exceeded",
+      "agentSteps budget exceeded"
+    ],
+    "measurementFailures": [],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "lander-pop",
+      "fixture": {
+        "sha256": "5dda8564bcb223f36d85fde9cf562c54069abd207ba6dc12babd006f89827a02"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "scenario generation (1 seeds)",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "physics differential (100 steps)",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "sensor and terminal classifications",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "oracle-sim landing (1/1 required)",
+          "kind": "headline",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": true,
+      "robustnessPass": true,
+      "pass": true,
+      "landings": [
+        {
+          "seed": 1592594996,
+          "status": "landed"
+        }
+      ]
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": true
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

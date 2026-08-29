@@ -10,6 +10,7 @@
     "build": "node scripts/build-site.mjs",
     "dev": "node scripts/serve.mjs",
     "evaluate": "node scripts/evaluate-submission.mjs",
+    "finalize:debug": "node scripts/finalize-debug-run.mjs",
     "hash:prompts": "node scripts/hash-prompts.mjs",
     "prepare": "node scripts/prepare-benchmark-run.mjs",
     "prompt": "node scripts/prompt-payload.mjs",

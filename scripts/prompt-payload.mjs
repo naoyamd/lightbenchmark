@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 const defaultPromptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../prompts");
 const taskFiles = {
   "japanese-chat": "japanese-chat-v1.md",
-  "color-cascade-18": "color-cascade-18-v1.md",
-  "prism-twist": "prism-twist-v1.md",
-  "lander-pop": "lander-pop-v1.md",
+  "color-cascade-18": "color-cascade-18-v1.1.md",
+  "prism-twist": "prism-twist-v1.1.md",
+  "lander-pop": "lander-pop-v1.1.md",
 };
 
 function textBlocks(markdown, file) {
@@ -53,7 +53,7 @@ export async function buildPromptPayload(taskId, promptsDir = defaultPromptsDir)
   }
 
   const [common, task] = await Promise.all([
-    blocksFrom(promptsDir, "common-coding-v1.md"),
+    blocksFrom(promptsDir, "common-coding-v1.1.md"),
     blocksFrom(promptsDir, file),
   ]);
   if (common.length !== 1 || task.length !== 1) throw new Error(`${file}: expected one common and one task block`);

@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Color Cascade 18</title>
+  <style>
+    :root {
+      --ink: #f5f4ff;
+      --muted: #a9a8c7;
+      --panel: rgba(19, 19, 42, .88);
+      --line: rgba(255, 255, 255, .13);
+      --accent: #ffcf5c;
+      --cell: min(6.7vw, 46px);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 0%, #42337d 0, transparent 38%),
+        radial-gradient(circle at 95% 12%, #174c70 0, transparent 34%),
+        #0a0b18;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .62rem .95rem;
+      color: var(--ink);
+      background: #24254c;
+      cursor: pointer;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+    button:hover { transform: translateY(-1px); background: #30315f; border-color: #7f80bc; }
+    button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .app { width: min(1080px, 100%); margin: 0 auto; padding: 1.2rem; }
+    header { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin-bottom: 1rem; }
+    h1 { margin: 0; font-size: clamp(1.55rem, 4vw, 2.5rem); letter-spacing: -.04em; }
+    h1 span { color: var(--accent); }
+    .tagline { margin: .2rem 0 0; color: var(--muted); font-size: .9rem; }
+    .layout { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(270px, 360px); gap: 1rem; align-items: start; }
+    .panel { border: 1px solid var(--line); border-radius: 24px; padding: 1rem; background: var(--panel); box-shadow: 0 18px 50px rgba(0,0,0,.25); }
+    .board-wrap { display: flex; justify-content: center; }
+    .board {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(6, var(--cell));
+      grid-template-rows: repeat(14, var(--cell));
+      gap: 3px;
+      padding: 7px;
+      border: 2px solid #55578a;
+      border-radius: 15px;
+      background: linear-gradient(#151633, #090a19);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 16px 35px rgba(0,0,0,.34);
+    }
+    .cell { display: grid; place-items: center; min-width: 0; border-radius: 8px; background: rgba(255,255,255,.035); }
+    .cell.token { background: var(--token); box-shadow: inset 0 -4px 0 rgba(0,0,0,.2), 0 3px 8px rgba(0,0,0,.25); }
+    .cell.clear { animation: pulse .28s ease-in-out infinite alternate; outline: 3px solid #fff1a6; outline-offset: -3px; }
+    .cell.ghost { opacity: .45; outline: 2px dashed #fff; outline-offset: -4px; }
+    .glyph { color: #101125; font-size: calc(var(--cell) * .48); font-weight: 900; line-height: 1; text-shadow: 0 1px 0 rgba(255,255,255,.35); }
+    .empty-mark { color: rgba(255,255,255,.1); font-size: .58rem; }
+    .c1 { --token: #ff5f76; } .c2 { --token: #55d6be; } .c3 { --token: #65a7ff; } .c4 { --token: #c88cff; }
+    @keyframes pulse { from { transform: scale(.88); filter: brightness(1); } to { transform: scale(1.08); filter: brightness(1.7); } }
+    .hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; margin-top: .85rem; }
+    .metric { padding: .65rem .7rem; border-radius: 14px; background: rgba(255,255,255,.06); }
+    .metric small { display: block; color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
+    .metric strong { display: block; margin-top: .15rem; font-size: 1.25rem; }
+    .status { min-height: 2.2rem; display: flex; align-items: center; justify-content: center; margin-top: .8rem; padding: .45rem; border-radius: 12px; color: var(--accent); font-weight: 800; letter-spacing: .08em; }
+    .status.success { background: rgba(255,207,92,.14); box-shadow: 0 0 25px rgba(255,207,92,.15); }
+    .section + .section { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
+    .section h2 { margin: 0 0 .65rem; font-size: .9rem; color: #dddafa; letter-spacing: .08em; text-transform: uppercase; }
+    .mode-buttons, .actions, .manual-controls { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .mode-buttons button.active { background: var(--accent); color: #171424; border-color: var(--accent); font-weight: 800; }
+    .control-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .7rem 0; color: var(--muted); font-size: .9rem; }
+    input[type="range"] { width: 52%; accent-color: var(--accent); }
+    .readout { margin: .7rem 0 0; min-height: 4.8rem; color: var(--muted); font-size: .9rem; line-height: 1.55; }
+    .readout b { color: var(--ink); }
+    .legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; margin-top: .8rem; }
+    .legend-item { display: flex; align-items: center; gap: .3rem; color: var(--muted); font-size: .76rem; }
+    .legend-swatch { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 6px; color: #101125; font-weight: 900; }
+    .help { color: var(--muted); font-size: .8rem; line-height: 1.55; }
+    .pair-chip { display: inline-flex; gap: 3px; vertical-align: middle; margin: 0 .2rem; }
+    .pair-chip i { display: grid; place-items: center; width: 1.35rem; height: 1.35rem; border-radius: 5px; color: #101125; font-style: normal; font-size: .8rem; font-weight: 900; }
+    #pairView { display: inline-flex; gap: 3px; vertical-align: middle; margin: 0 .2rem; }
+    #pairView i { display: grid; place-items: center; width: 1.35rem; height: 1.35rem; border-radius: 5px; color: #101125; font-style: normal; font-size: .8rem; font-weight: 900; background: var(--token); }
+    @media (max-width: 760px) {
+      :root { --cell: min(11.5vw, 43px); }
+      .layout { grid-template-columns: 1fr; }
+      header { align-items: start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div><h1>Color Cascade <span>18</span></h1><p class="tagline">同じ色、違う記号。連鎖のリズムを見つけよう。</p></div>
+      <div class="actions"><button id="resetBtn" type="button">↺ Reset</button><button id="runBtn" type="button">▶ Replay challenge</button></div>
+    </header>
+    <div class="layout">
+      <section class="panel">
+        <div class="board-wrap"><div id="board" class="board" role="grid" aria-label="Color Cascade board"></div></div>
+        <div class="hud">
+          <div class="metric"><small>Chain</small><strong id="chainValue">0</strong></div>
+          <div class="metric"><small>Cleared</small><strong id="clearValue">0</strong></div>
+          <div class="metric"><small>Mode</small><strong id="modeValue">Challenge</strong></div>
+        </div>
+        <div id="status" class="status" aria-live="polite"></div>
+        <div class="legend" aria-label="Color and symbol legend">
+          <div class="legend-item"><i class="legend-swatch c1">●</i> Coral</div>
+          <div class="legend-item"><i class="legend-swatch c2">▲</i> Mint</div>
+          <div class="legend-item"><i class="legend-swatch c3">◆</i> Sky</div>
+          <div class="legend-item"><i class="legend-swatch c4">✦</i> Lilac</div>
+        </div>
+      </section>
+      <aside class="panel">
+        <section class="section">
+          <h2>Mode</h2>
+          <div class="mode-buttons"><button id="challengeMode" class="active" type="button">Challenge</button><button id="manualMode" type="button">Manual</button></div>
+          <div class="control-row"><label for="speed">Replay speed</label><input id="speed" type="range" min="0.5" max="2.5" step="0.1" value="1"><output id="speedOut">1.0×</output></div>
+        </section>
+        <section class="section" id="manualPanel" hidden>
+          <h2>Manual controls</h2>
+          <div class="manual-controls"><button id="leftBtn" type="button">←</button><button id="rightBtn" type="button">→</button><button id="rotateBtn" type="button">↻ Rotate</button><button id="dropBtn" type="button">⬇ Drop</button></div>
+          <p class="help">キーボード: ← → で列、↑で回転、Spaceで落下。現在のペア <span id="pairView"></span></p>
+        </section>
+        <section class="section">
+          <h2>Wave monitor</h2>
+          <p id="readout" class="readout">Challenge盤面を読み込み中…</p>
+          <p class="help">消えるセルは明るい枠で表示。次の盤面へ重力で圧縮されるよ。</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+  <script type="module">
+    import { RULES, dropPair, resolve } from './engine.mjs';
+
+    const emptyBoard = () => Array.from({ length: RULES.height }, () => Array(RULES.width).fill(0));
+    const copyBoard = (board) => board.map((row) => row.slice());
+    const copy = (value) => (typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value)));
+    const allEmpty = (board) => board.every((row) => row.every((cell) => cell === 0));
+    const glyphs = ['', '●', '▲', '◆', '✦'];
+    const names = ['', 'Coral', 'Mint', 'Sky', 'Lilac'];
+
+    const boardEl = document.querySelector('#board');
+    const chainEl = document.querySelector('#chainValue');
+    const clearEl = document.querySelector('#clearValue');
+    const modeEl = document.querySelector('#modeValue');
+    const statusEl = document.querySelector('#status');
+    const readoutEl = document.querySelector('#readout');
+    const speedEl = document.querySelector('#speed');
+    const speedOut = document.querySelector('#speedOut');
+    const manualPanel = document.querySelector('#manualPanel');
+    const pairView = document.querySelector('#pairView');
+
+    let challengeBoard = null;
+    let mode = 'challenge';
+    let board = emptyBoard();
+    let manualBoard = emptyBoard();
+    let pair = { x: 2, rotation: 0, colors: [1, 2] };
+    let currentStep = null;
+    let previousBoard = null;
+    let eventLog = [];
+    let running = false;
+    let generation = 0;
+    let timers = new Set();
+    let waits = new Set();
+    let animations = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function clearTimers() {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+      for (const pending of waits) pending.resolve(false);
+      waits.clear();
+    }
+    function wait(ms, token) {
+      return new Promise((resolveWait) => {
+        const pending = { timer: null, resolve: resolveWait };
+        pending.timer = setTimeout(() => {
+          timers.delete(pending.timer);
+          waits.delete(pending);
+          resolveWait(token === generation);
+        }, ms);
+        timers.add(pending.timer);
+        waits.add(pending);
+      });
+    }
+    function boardFromDisplayed() { return copyBoard(board); }
+
+    function render(displayBoard = board, highlight = [], ghost = null) {
+      const marked = new Set(highlight.map(([x, y]) => `${x},${y}`));
+      boardEl.replaceChildren();
+      for (let row = RULES.height - 1; row >= 0; row -= 1) {
+        for (let x = 0; x < RULES.width; x += 1) {
+          const value = displayBoard[row][x];
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.setAttribute('role', 'gridcell');
+          cell.setAttribute('aria-label', value ? `${names[value]} ${glyphs[value]}` : 'empty');
+          if (value) {
+            cell.classList.add('token', `c${value}`);
+            if (marked.has(`${x},${row}`)) cell.classList.add('clear');
+            const glyph = document.createElement('span');
+            glyph.className = 'glyph';
+            glyph.textContent = glyphs[value];
+            cell.append(glyph);
+          } else {
+            cell.innerHTML = '<span class="empty-mark">·</span>';
+          }
+          if (ghost && ghost.some(([gx, gy, gv]) => gx === x && gy === row && !value)) {
+            const [, , gv] = ghost.find(([gx, gy]) => gx === x && gy === row);
+            cell.classList.add('token', `c${gv}`, 'ghost');
+            cell.querySelector('.empty-mark')?.remove();
+            const glyph = document.createElement('span');
+            glyph.className = 'glyph';
+            glyph.textContent = glyphs[gv];
+            cell.append(glyph);
+          }
+          boardEl.append(cell);
+        }
+      }
+      updateHud();
+    }
+
+    function loggedChains() { return eventLog.filter((event) => event.type === 'resolve-step').length; }
+    function lastCleared() {
+      const last = [...eventLog].reverse().find((event) => event.type === 'resolve-step');
+      return last ? last.cleared.length : 0;
+    }
+    function updateHud() {
+      const chain = loggedChains();
+      const cleared = currentStep ? currentStep.cleared.length : lastCleared();
+      chainEl.textContent = String(chain);
+      clearEl.textContent = String(cleared);
+      modeEl.textContent = mode === 'challenge' ? 'Challenge' : 'Manual';
+      const solved = mode === 'challenge' && chain > 0 && allEmpty(board) && !running;
+      statusEl.textContent = solved ? 'ALL CLEAR' : (running ? `WAVE ${currentStep?.chain ?? chain}` : '');
+      statusEl.classList.toggle('success', solved);
+      if (mode === 'challenge') {
+        if (currentStep) readoutEl.innerHTML = `<b>Chain ${currentStep.chain}</b> · ${currentStep.cleared.length} cells cleared<br>次の盤面を表示中`;
+        else if (!challengeBoard) readoutEl.textContent = 'Challenge盤面を読み込み中…';
+        else if (chain === 0) readoutEl.textContent = 'Replay challenge で18連鎖の盤面を再生';
+        else readoutEl.textContent = '実際のresolve結果を表示しました';
+      } else {
+        readoutEl.textContent = 'ペアを落として、4つ以上つなげよう';
+      }
+      pairView.innerHTML = pair.colors.map((color) => `<i class="c${color}">${glyphs[color]}</i>`).join('');
+    }
+
+    function ghostCells() {
+      if (mode !== 'manual') return null;
+      const [dx, dy] = [[0, 1], [1, 0], [0, -1], [-1, 0]][pair.rotation];
+      const childX = pair.x + dx;
+      if (childX < 0 || childX >= RULES.width) return null;
+      let y = RULES.height + 1;
+      while (true) {
+        const next = y - 1;
+        if ([[pair.x, next], [childX, next + dy]].some(([x, cy]) => cy < 0 || (cy < RULES.height && manualBoard[cy][x]))) break;
+        y -= 1;
+      }
+      return [[pair.x, y, pair.colors[0]], [childX, y + dy, pair.colors[1]]];
+    }
+
+    function setMode(nextMode) {
+      if (running) return;
+      mode = nextMode;
+      currentStep = null;
+      previousBoard = null;
+      eventLog = [];
+      board = mode === 'challenge' ? copyBoard(challengeBoard ?? emptyBoard()) : copyBoard(manualBoard);
+      document.querySelector('#challengeMode').classList.toggle('active', mode === 'challenge');
+      document.querySelector('#manualMode').classList.toggle('active', mode === 'manual');
+      manualPanel.hidden = mode !== 'manual';
+      render(board, [], ghostCells());
+    }
+
+    function recordStep(step) {
+      eventLog.push({
+        type: 'resolve-step',
+        chain: step.chain,
+        groups: copy(step.groups),
+        cleared: copy(step.cleared),
+        boardAfter: copyBoard(step.boardAfter),
+      });
+    }
+
+    async function runChallenge() {
+      if (running) return api.snapshot();
+      await challengeReady;
+      const token = generation;
+      const result = resolve(challengeBoard);
+      running = true;
+      mode = 'challenge';
+      manualPanel.hidden = true;
+      document.querySelector('#challengeMode').classList.add('active');
+      document.querySelector('#manualMode').classList.remove('active');
+      board = copyBoard(challengeBoard);
+      eventLog = [{ type: 'challenge-start', board: copyBoard(board) }];
+      currentStep = null;
+      render(board);
+      for (const step of result.steps) {
+        if (token !== generation) return api.snapshot();
+        currentStep = copy(step);
+        previousBoard = copyBoard(board);
+        render(previousBoard, step.cleared);
+        const duration = api.animations ? Math.round(420 / Number(speedEl.value)) : 0;
+        if (!(await wait(duration, token))) return api.snapshot();
+        board = copyBoard(step.boardAfter);
+        recordStep(step);
+        render(board);
+        const settle = api.animations ? Math.round(250 / Number(speedEl.value)) : 0;
+        if (!(await wait(settle, token))) return api.snapshot();
+      }
+      if (token !== generation) return api.snapshot();
+      currentStep = null;
+      running = false;
+      eventLog.push({ type: 'challenge-finished', board: copyBoard(board) });
+      render(board);
+      return api.snapshot();
+    }
+
+    function reset() {
+      generation += 1;
+      clearTimers();
+      running = false;
+      mode = 'challenge';
+      board = copyBoard(challengeBoard ?? emptyBoard());
+      manualBoard = emptyBoard();
+      pair = { x: 2, rotation: 0, colors: [1, 2] };
+      currentStep = null;
+      previousBoard = null;
+      eventLog = [];
+      document.querySelector('#challengeMode').classList.add('active');
+      document.querySelector('#manualMode').classList.remove('active');
+      manualPanel.hidden = true;
+      render(board);
+      return api.snapshot();
+    }
+
+    function manualDrop() {
+      if (running || mode !== 'manual') return api.snapshot();
+      const placed = dropPair(manualBoard, pair);
+      if (!placed.ok) {
+        readoutEl.textContent = `Drop failed: ${placed.reason}`;
+        return api.snapshot();
+      }
+      manualBoard = copyBoard(placed.board);
+      eventLog.push({ type: 'pair-landed', board: copyBoard(manualBoard), pair: copy(pair) });
+      const resolved = resolve(manualBoard);
+      if (resolved.steps.length) {
+        for (const step of resolved.steps) recordStep(step);
+        manualBoard = copyBoard(resolved.finalBoard);
+      }
+      board = copyBoard(manualBoard);
+      render(board, [], ghostCells());
+      pair = { x: 2, rotation: 0, colors: [pair.colors[1] % 4 + 1, pair.colors[0] % 4 + 1] };
+      render(board, [], ghostCells());
+      return api.snapshot();
+    }
+
+    const api = {
+      reset,
+      runChallenge,
+      scramble: runChallenge,
+      run: runChallenge,
+      play: runChallenge,
+      animations,
+      snapshot() {
+        const chain = loggedChains();
+        const solved = mode === 'challenge' && chain > 0 && allEmpty(board) && !running;
+        return copy({
+          mode,
+          board: boardFromDisplayed(),
+          chain,
+          chainCount: chain,
+          cleared: currentStep ? currentStep.cleared : (eventLog.at(-1)?.cleared ?? []),
+          solved,
+          landed: eventLog.some((event) => event.type === 'pair-landed'),
+          status: solved ? 'ALL CLEAR' : (running ? 'RUNNING' : 'IDLE'),
+          running,
+        });
+      },
+      log() { return copy(eventLog); },
+    };
+    window.__LIGHTBENCH__ = api;
+
+    const challengeReady = fetch('./challenge.json', { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw new Error(`challenge.json: ${response.status}`);
+        return response.json();
+      })
+      .then((data) => {
+        challengeBoard = copyBoard(data.board);
+        board = copyBoard(challengeBoard);
+        render(board);
+      })
+      .catch((error) => {
+        readoutEl.textContent = `Challenge load error: ${error.message}`;
+        challengeBoard = emptyBoard();
+        board = emptyBoard();
+        render(board);
+      });
+
+    document.querySelector('#runBtn').addEventListener('click', () => runChallenge());
+    document.querySelector('#resetBtn').addEventListener('click', () => reset());
+    document.querySelector('#challengeMode').addEventListener('click', () => setMode('challenge'));
+    document.querySelector('#manualMode').addEventListener('click', () => setMode('manual'));
+    speedEl.addEventListener('input', () => { speedOut.value = `${Number(speedEl.value).toFixed(1)}×`; speedOut.textContent = speedOut.value; });
+    const move = (dx) => { if (mode === 'manual' && !running) { pair.x = Math.max(0, Math.min(RULES.width - 1, pair.x + dx)); render(board, [], ghostCells()); } };
+    document.querySelector('#leftBtn').addEventListener('click', () => move(-1));
+    document.querySelector('#rightBtn').addEventListener('click', () => move(1));
+    document.querySelector('#rotateBtn').addEventListener('click', () => { if (mode === 'manual' && !running) { pair.rotation = (pair.rotation + 1) % 4; render(board, [], ghostCells()); } });
+    document.querySelector('#dropBtn').addEventListener('click', manualDrop);
+    window.addEventListener('keydown', (event) => {
+      if (mode !== 'manual' || running) return;
+      if (event.key === 'ArrowLeft') { event.preventDefault(); move(-1); }
+      if (event.key === 'ArrowRight') { event.preventDefault(); move(1); }
+      if (event.key === 'ArrowUp') { event.preventDefault(); pair.rotation = (pair.rotation + 1) % 4; render(board, [], ghostCells()); }
+      if (event.code === 'Space') { event.preventDefault(); manualDrop(); }
+    });
+    render(board);
+  </script>
+</body>
+</html>

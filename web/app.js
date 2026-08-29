@@ -6,6 +6,8 @@ const dialog = document.querySelector('#detail-dialog');
 const detailContent = document.querySelector('#detail-content');
 const closeButton = document.querySelector('#dialog-close');
 let runs = [];
+let activeShowcase = null;
+let requestSerial = 0;
 
 const labels = {
   runId: 'Run ID', cohortId: 'コホート', taskId: 'タスク', runKind: '区分', status: 'ステータス',
@@ -19,6 +21,7 @@ const labels = {
   lane: '実行レーン',
   harness: '実行ハーネス',
   isolation: '実行隔離',
+  showcase: 'ショーケース',
 };
 
 function escapeHtml(value) {
@@ -66,6 +69,52 @@ function artifactGallery(run, compact = false) {
   }).join('')}</div>`;
 }
 
+function showcaseKind(run) {
+  return run.showcase?.kind ?? run.showcase?.type ?? run.showcase?.mode;
+}
+
+function showcaseMissing(run) {
+  const reason = typeof run.evaluation?.showcase?.reason === 'string' ? `：${run.evaluation.showcase.reason}` : '';
+  return `<p class="showcase-empty">ビジュアル未収録${reason ? text(reason) : ''}</p>`;
+}
+
+function demoMessage(run) {
+  return run.demo === true || run.isDemo === true
+    ? '<p class="demo-message">表示確認用のデモ</p>'
+    : '';
+}
+
+function evaluationSummary(run) {
+  if (run.evaluation === null || run.evaluation === undefined) return '';
+  if (typeof run.evaluation !== 'object') return `<section class="evaluation-summary"><h3>独立評価</h3><p>${text(run.evaluation)}</p></section>`;
+  let passes = [run.evaluation.headline, run.evaluation.logic, run.evaluation.robustness]
+    .map(item => item?.pass).filter(value => typeof value === 'boolean');
+  if (!passes.length && run.evaluation.deterministicChecks) {
+    passes = Object.values(run.evaluation.deterministicChecks)
+      .map(item => item?.pass ?? item?.formatPass).filter(value => typeof value === 'boolean');
+  }
+  const verdict = passes.length && passes.every(Boolean) ? '成功'
+    : passes.some(Boolean) ? '部分達成'
+      : passes.length ? '失敗' : '判定不能';
+  const reason = run.evaluation.headline?.reason;
+  return `<section class="evaluation-summary"><h3>独立評価</h3><p><strong>${verdict}</strong> · ${text(run.evaluation.status ?? '記録あり')}${reason ? `<br>${text(reason)}` : ''}</p></section>`;
+}
+
+function showcaseMarkup(run, compact = false) {
+  const showcase = run.showcase;
+  if (!showcase) return showcaseMissing(run);
+  if (showcaseKind(run) === 'chat') {
+    const turns = Array.isArray(showcase.turns) ? showcase.turns : showcase.text === undefined ? [] : [{ label: 'チャット', text: showcase.text }];
+    return `<section class="showcase chat-showcase${compact ? ' showcase-compact' : ''}"><h3>チャット</h3>${turns.map(turn => `<div class="chat-turn"><strong>${text(turn.label ?? 'チャット')}</strong><pre class="chat-transcript">${escapeHtml(typeof turn.text === 'string' ? turn.text : '取得不能')}</pre></div>`).join('') || '<p class="showcase-empty">取得不能</p>'}</section>`;
+  }
+  if (showcaseKind(run) !== 'live') return showcaseMissing(run);
+  const index = runs.indexOf(run);
+  return `<section class="showcase live-showcase${compact ? ' showcase-compact' : ''}" data-showcase-container>
+    <button class="showcase-button" type="button" data-showcase-run-index="${index}">再演する</button>
+    <span class="showcase-status">クリックで生成</span>
+  </section>`;
+}
+
 function metric(labelText, value) {
   return `<div class="metric"><dt>${escapeHtml(labelText)}</dt><dd>${text(value)}</dd></div>`;
 }
@@ -84,20 +133,28 @@ function populateFilters() {
 function renderCards() {
   const task = taskFilter.value;
   const status = statusFilter.value;
-  const filtered = runs.filter(run => (!task || run.taskId === task) && (!status || run.status === status));
+  const filtered = runs
+    .filter(run => (!task || run.taskId === task) && (!status || run.status === status))
+    .sort((first, second) => {
+      const rank = run => run.demo === true || run.isDemo === true ? 0 : run.evaluation == null ? 2 : 1;
+      return rank(first) - rank(second) || String(first.runId).localeCompare(String(second.runId));
+    });
   resultCount.textContent = `${filtered.length} 件`;
   if (!filtered.length) {
     results.innerHTML = '<div class="empty"><strong>まだ結果がないみたい。</strong><br>フィルターをゆるめるか、新しい run を追加してみてね。</div>';
     return;
   }
-  results.innerHTML = filtered.map((run, index) => {
+  results.innerHTML = filtered.map(run => {
     const total = run.usage?.total;
     const demo = run.demo === true || run.isDemo === true;
     const debug = run.runKind === 'debug';
     const badge = demo ? '<span class="badge demo-badge">DEMO</span>'
-      : debug ? '<span class="badge debug-badge">DEBUG · INCONCLUSIVE</span>'
+        : debug ? '<span class="badge debug-badge">DEBUG · INCONCLUSIVE</span>'
         : `<span class="badge">${text(run.status)}</span>`;
     return `<article class="card">
+      ${demoMessage(run)}
+      ${showcaseMarkup(run, true)}
+      ${evaluationSummary(run)}
       <div class="card-head"><div><h2>${text(run.model?.displayName)}</h2><p class="provider">${text(run.model?.provider)} · ${text(run.model?.modelId)}</p></div>${badge}</div>
       <p class="task-line">${text(run.taskId)} · ${formatDate(run.execution?.startedAt ?? run.execution?.endedAt)}</p>
       ${artifactGallery(run, true)}
@@ -111,6 +168,7 @@ function renderCards() {
     </article>`;
   }).join('');
   results.querySelectorAll('[data-run-index]').forEach(button => button.addEventListener('click', () => openDetail(runs[Number(button.dataset.runIndex)])));
+  bindShowcaseButtons(results);
 }
 
 function detailList(entries) {
@@ -131,16 +189,154 @@ function rawSection(name, value) {
   return `<h3>${escapeHtml(name)}</h3><pre class="raw">${escapeHtml(content)}</pre>`;
 }
 
+function showcaseActions(taskId) {
+  return {
+    'color-cascade-18': ['reset', 'runChallenge'],
+    'prism-twist': ['reset', 'scramble', 'play'],
+    'lander-pop': ['reset', 'run'],
+  }[taskId] ?? [];
+}
+
+function stopShowcase() {
+  if (!activeShowcase) return;
+  const session = activeShowcase;
+  session.cancelled = true;
+  clearTimeout(session.readyTimer);
+  session.readyReject?.(new Error('showcase replay superseded'));
+  for (const pending of session.pending.values()) {
+    clearTimeout(pending.timer);
+    pending.reject(new Error('showcase replay superseded'));
+  }
+  session.pending.clear();
+  if (session.onMessage) window.removeEventListener('message', session.onMessage);
+  session.frame.remove();
+  session.button.textContent = '再演する';
+  if (!session.finished) session.status.textContent = '停止しました';
+  activeShowcase = null;
+}
+
+function bindShowcaseButtons(root) {
+  root.querySelectorAll('[data-showcase-run-index]').forEach(button => {
+    button.addEventListener('click', () => {
+      const run = runs[Number(button.dataset.showcaseRunIndex)];
+      const container = button.closest('[data-showcase-container]');
+      if (run && container) playShowcase(run, container);
+    });
+  });
+}
+
+function playShowcase(run, container) {
+  if (activeShowcase?.container === container && !activeShowcase.finished) {
+    stopShowcase();
+    return;
+  }
+  stopShowcase();
+  const url = run.showcase?.url;
+  const expectedPrefix = `./showcases/${encodeURIComponent(run.runId)}/`;
+  if (typeof url !== 'string' || !url.startsWith(expectedPrefix)) {
+    container.querySelector('.showcase-status').textContent = 'ショーケースを読み込めません';
+    return;
+  }
+  const actions = showcaseActions(run.taskId);
+  if (!actions.length) {
+    container.querySelector('.showcase-status').textContent = 'このタスクはライブ非対応';
+    return;
+  }
+  const frame = document.createElement('iframe');
+  frame.className = 'showcase-frame';
+  frame.setAttribute('sandbox', 'allow-scripts');
+  frame.setAttribute('referrerpolicy', 'no-referrer');
+  frame.title = `${run.taskId} live showcase`;
+  const status = container.querySelector('.showcase-status');
+  const button = container.querySelector('.showcase-button');
+  const session = { frame, button, container, status, cancelled: false, finished: false, nonce: null, pending: new Map(), readyReject: null, onMessage: null };
+  activeShowcase = session;
+  button.textContent = '停止する';
+  status.textContent = '読み込み中…';
+
+  const send = (action, args = []) => new Promise((resolve, reject) => {
+    if (session.cancelled) {
+      reject(new Error('showcase replay superseded'));
+      return;
+    }
+    const requestId = `showcase-${++requestSerial}`;
+    const timer = setTimeout(() => {
+      session.pending.delete(requestId);
+      reject(new Error(`${action} timeout`));
+    }, 60_000);
+    session.pending.set(requestId, { resolve, reject, timer });
+    frame.contentWindow.postMessage({
+      protocol: 'LIGHTBENCH-1', nonce: session.nonce, taskId: run.taskId, type: 'command', requestId, action, args,
+    }, '*');
+  });
+
+  (async () => {
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`showcase HTTP ${response.status}`);
+      const source = await response.text();
+      if (session.cancelled) return;
+      const marker = '__LIGHTBENCH_ASSET_ROOT_9b41c8__';
+      if (!source.includes(marker)) throw new Error('showcase security metadata is missing');
+      const assetRoot = new URL('.', new URL(url, location.href)).href;
+      const ready = new Promise((resolve, reject) => {
+        session.readyResolve = resolve;
+        session.readyReject = reject;
+        session.readyTimer = setTimeout(() => reject(new Error('bridge timeout')), 8000);
+      });
+      session.onMessage = event => {
+        if (event.source !== frame.contentWindow) return;
+        const data = event.data;
+        if (!data || data.protocol !== 'LIGHTBENCH-1' || data.taskId !== run.taskId) return;
+        if (data.type === 'ready' && typeof data.nonce === 'string') {
+          session.nonce = data.nonce;
+          clearTimeout(session.readyTimer);
+          session.readyResolve();
+          return;
+        }
+        if (data.type !== 'response' || data.nonce !== session.nonce) return;
+        const pending = session.pending.get(data.requestId);
+        if (!pending) return;
+        session.pending.delete(data.requestId);
+        clearTimeout(pending.timer);
+        if (data.ok) pending.resolve(data.value);
+        else pending.reject(new Error(data.error || 'showcase action failed'));
+      };
+      window.addEventListener('message', session.onMessage);
+      frame.srcdoc = source.replaceAll(marker, assetRoot);
+      container.append(frame);
+      status.textContent = '再生中…';
+      await ready;
+      for (const action of actions) {
+        if (session.cancelled) return;
+        await send(action);
+      }
+      if (!session.cancelled) {
+        session.finished = true;
+        button.textContent = '再演する';
+        status.textContent = '再生完了';
+      }
+    } catch (error) {
+      if (!session.cancelled) {
+        session.finished = true;
+        button.textContent = '再演する';
+        status.textContent = `再生失敗：${error.message}`;
+      }
+    }
+  })();
+}
+
 function openDetail(run) {
   if (!run) return;
   const title = `${run.model?.displayName ?? 'モデル'} / ${run.runId}`;
-  detailContent.innerHTML = `<h2 id="detail-title">${text(title)}</h2>${artifactGallery(run)}
+  detailContent.innerHTML = `<h2 id="detail-title">${text(title)}</h2>${demoMessage(run)}${showcaseMarkup(run)}${evaluationSummary(run)}${artifactGallery(run)}
     ${detailList([['runId', run.runId], ['cohortId', run.cohortId], ['taskId', run.taskId], ['runKind', run.runKind], ['status', run.status]])}
     <h3>モデル</h3>${detailList(Object.entries(run.model ?? {}).map(([key, value]) => [key, value]))}
     <h3>実行</h3>${detailList(Object.entries(run.execution ?? {}).map(([key, value]) => [key, key.endsWith('At') ? formatDate(value) : key === 'durationMs' ? formatDuration(value) : value]))}
     <h3>使用量</h3>${usageSection('ルート', run.usage?.root)}${usageSection('サブエージェント', run.usage?.subagents)}${usageSection('合計', run.usage?.total)}
     <h3>エージェント</h3>${detailList(Object.entries(run.agents ?? {}).filter(([key]) => key !== 'items').map(([key, value]) => [key, value]))}${run.agents?.items === null ? '<p class="raw">内訳: 取得不能</p>' : (run.agents?.items ?? []).map((item, index) => `<div class="raw agent-item">#${index + 1}\n${escapeHtml(JSON.stringify(item, null, 2))}</div>`).join('') || '<p class="raw">内訳なし</p>'}
     ${rawSection('介入', run.interventions)}${rawSection('バージョン', run.versions)}${rawSection('ハッシュ', run.hashes)}${rawSection('評価', run.evaluation)}`;
+  bindShowcaseButtons(detailContent);
   if (typeof dialog.showModal === 'function') dialog.showModal();
   else dialog.setAttribute('open', '');
 }

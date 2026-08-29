@@ -14,15 +14,17 @@ export function responseText(response) {
 }
 
 export function addUsage(...responses) {
-  return responses.reduce((total, response) => {
-    const usage = response?.usage ?? {};
-    total.inputTokens += usage.input_tokens ?? 0;
-    total.outputTokens += usage.output_tokens ?? 0;
-    total.cachedTokens += usage.input_tokens_details?.cached_tokens ?? 0;
-    total.reasoningTokens += usage.output_tokens_details?.reasoning_tokens ?? 0;
-    total.totalTokens += usage.total_tokens ?? 0;
-    return total;
-  }, { inputTokens: 0, outputTokens: 0, cachedTokens: 0, reasoningTokens: 0, totalTokens: 0 });
+  const sum = getter => {
+    const values = responses.map(response => getter(response?.usage ?? {}));
+    return values.every(Number.isFinite) ? values.reduce((total, value) => total + value, 0) : null;
+  };
+  return {
+    inputTokens: sum(usage => usage.input_tokens),
+    outputTokens: sum(usage => usage.output_tokens),
+    cachedTokens: sum(usage => usage.input_tokens_details?.cached_tokens),
+    reasoningTokens: sum(usage => usage.output_tokens_details?.reasoning_tokens),
+    totalTokens: sum(usage => usage.total_tokens),
+  };
 }
 
 async function createResponse(apiKey, body, signal) {
@@ -40,6 +42,9 @@ async function createResponse(apiKey, body, signal) {
 }
 
 export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max', timeoutMs = 720_000 }) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 720_000) {
+    throw new Error('timeoutMs must be an integer from 1 to 720000');
+  }
   const root = path.resolve(workspace);
   const stat = await lstat(root).catch(() => null);
   if (!stat?.isDirectory()) throw new Error(`workspace does not exist: ${root}`);
@@ -47,8 +52,6 @@ export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max
   if ((await Promise.all(outputFiles.map(file => lstat(path.join(root, file)).catch(() => null)))).some(Boolean)) {
     throw new Error('chat output already exists; use a fresh workspace');
   }
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY is required');
   const [system, turn1, turn2, payloadText] = await Promise.all([
     readFile(path.join(root, 'system.txt'), 'utf8'),
     readFile(path.join(root, 'turn1.txt'), 'utf8'),
@@ -58,9 +61,27 @@ export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max
   const payload = JSON.parse(payloadText);
   const promptHash = createHash('sha256').update(JSON.stringify(payload.sequence)).digest('hex');
   const startedAt = new Date();
+  const metadataFile = path.join(root, outputFiles[2]);
+  const commonMetadata = {
+    schemaVersion: 1,
+    harness: 'openai-responses-api',
+    isolation: 'tools-disabled-api',
+    officialEligible: false,
+    modelRequested: model,
+    reasoningEffort: effort,
+    toolsSent: 0,
+    startedAt: startedAt.toISOString(),
+    endedAt: null,
+    durationMs: null,
+    terminationReason: 'running',
+    promptHash,
+  };
+  await writeFile(metadataFile, `${JSON.stringify(commonMetadata, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
   const signal = AbortSignal.timeout(timeoutMs);
   let first;
   try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY is required');
     first = await createResponse(apiKey, {
       model,
       input: [
@@ -74,6 +95,13 @@ export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max
     }, signal);
     const firstText = responseText(first);
     if (!firstText) throw new Error('turn 1 returned no output text');
+    await writeFile(path.join(root, outputFiles[0]), firstText, { encoding: 'utf8', flag: 'wx' });
+    await writeFile(metadataFile, `${JSON.stringify({
+      ...commonMetadata,
+      terminationReason: 'running-turn-2',
+      partialResponseIds: [first.id],
+      usage: addUsage(first),
+    }, null, 2)}\n`, 'utf8');
     const second = await createResponse(apiKey, {
       model,
       previous_response_id: first.id,
@@ -85,47 +113,30 @@ export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max
     }, signal);
     const secondText = responseText(second);
     if (!secondText) throw new Error('turn 2 returned no output text');
+    await writeFile(path.join(root, outputFiles[1]), secondText, { encoding: 'utf8', flag: 'wx' });
     const endedAt = new Date();
     const metadata = {
-      schemaVersion: 1,
-      harness: 'openai-responses-api',
-      isolation: 'tools-disabled-api',
-      officialEligible: true,
-      modelRequested: model,
+      ...commonMetadata,
       modelReturned: second.model ?? first.model ?? null,
-      reasoningEffort: effort,
-      toolsSent: 0,
-      startedAt: startedAt.toISOString(),
       endedAt: endedAt.toISOString(),
       durationMs: endedAt - startedAt,
-      promptHash,
+      terminationReason: 'completed',
       responseIds: [first.id, second.id],
       usage: addUsage(first, second),
     };
-    await Promise.all([
-      writeFile(path.join(root, outputFiles[0]), firstText, 'utf8'),
-      writeFile(path.join(root, outputFiles[1]), secondText, 'utf8'),
-      writeFile(path.join(root, outputFiles[2]), `${JSON.stringify(metadata, null, 2)}\n`, 'utf8'),
-    ]);
+    await writeFile(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
     return metadata;
   } catch (error) {
     const endedAt = new Date();
     const metadata = {
-      schemaVersion: 1,
-      harness: 'openai-responses-api',
-      isolation: 'tools-disabled-api',
-      officialEligible: true,
-      modelRequested: model,
-      reasoningEffort: effort,
-      toolsSent: 0,
-      startedAt: startedAt.toISOString(),
+      ...commonMetadata,
       endedAt: endedAt.toISOString(),
       durationMs: endedAt - startedAt,
-      promptHash,
+      terminationReason: error?.name === 'TimeoutError' ? 'timeout' : 'harness-error',
       usage: first ? addUsage(first) : null,
       error: error instanceof Error ? error.message : String(error),
     };
-    await writeFile(path.join(root, outputFiles[2]), `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
+    await writeFile(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
     throw error;
   }
 }
@@ -143,8 +154,8 @@ function parseArgs(args) {
     else if (key === '--timeout-ms') options.timeoutMs = Number(value);
     else throw new Error(`unknown option: ${key}`);
   }
-  if (options.timeoutMs !== undefined && (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0)) {
-    throw new Error('--timeout-ms must be a positive integer');
+  if (options.timeoutMs !== undefined && (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 720_000)) {
+    throw new Error('--timeout-ms must be an integer from 1 to 720000');
   }
   return options;
 }

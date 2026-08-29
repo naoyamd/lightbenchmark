@@ -7,6 +7,7 @@ const types = new Map([
   [".css", "text/css; charset=utf-8"],
   [".html", "text/html; charset=utf-8"],
   [".js", "text/javascript; charset=utf-8"],
+  [".mjs", "text/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
   [".png", "image/png"],
   [".svg", "image/svg+xml"],
@@ -23,6 +24,7 @@ createServer(async (request, response) => {
     response.writeHead(200, {
       "Content-Type": types.get(path.extname(file)) ?? "application/octet-stream",
       "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
     });
     response.end(body);
   } catch {

@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prism Twist · 3×3</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f8f5ff;
+      --muted: #b9acd9;
+      --panel: rgba(35, 24, 75, .78);
+      --panel-deep: rgba(25, 17, 58, .9);
+      --line: rgba(217, 188, 255, .18);
+      --pink: #ff78b7;
+      --aqua: #53e8cf;
+      --gold: #ffd269;
+      --violet: #a98aff;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(255, 120, 183, .18), transparent 32%),
+        radial-gradient(circle at 88% 18%, rgba(83, 232, 207, .14), transparent 35%),
+        linear-gradient(135deg, #19113b 0%, #281558 45%, #15173f 100%);
+      overflow-x: hidden;
+    }
+    body::before, body::after {
+      content: ""; position: fixed; pointer-events: none; z-index: -1;
+      border-radius: 50%; filter: blur(2px); opacity: .32;
+    }
+    body::before { width: 28rem; height: 28rem; right: -12rem; bottom: -13rem; background: #6e52ff; }
+    body::after { width: 18rem; height: 18rem; left: -9rem; bottom: 20%; background: #ff4ea5; }
+    main { width: min(1180px, 100%); margin: 0 auto; padding: 22px 20px 30px; }
+    header { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+    .eyebrow { margin: 0 0 5px; color: var(--aqua); font-size: .72rem; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 4.3rem); line-height: .92; letter-spacing: -.07em; font-weight: 900; }
+    h1 span { color: var(--pink); }
+    .tagline { margin: 5px 0 0; color: var(--muted); font-size: .9rem; }
+    .badge { border: 1px solid var(--line); background: rgba(255,255,255,.06); border-radius: 999px; padding: 8px 12px; color: var(--gold); font-size: .72rem; font-weight: 800; letter-spacing: .12em; white-space: nowrap; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .8fr); gap: 16px; }
+    .card { border: 1px solid var(--line); border-radius: 28px; background: var(--panel); box-shadow: 0 20px 65px rgba(8, 5, 30, .25), inset 0 1px rgba(255,255,255,.06); backdrop-filter: blur(16px); }
+    .stage-card { position: relative; min-height: 560px; overflow: hidden; }
+    #stage { display: block; width: 100%; height: 100%; min-height: 560px; touch-action: none; cursor: grab; }
+    #stage:active { cursor: grabbing; }
+    .stage-tip { position: absolute; left: 23px; bottom: 18px; color: rgba(248,245,255,.64); font-size: .74rem; letter-spacing: .08em; pointer-events: none; }
+    .hud { position: absolute; top: 18px; left: 20px; right: 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
+    .status { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 15px; background: rgba(21, 14, 53, .72); border: 1px solid rgba(255,255,255,.1); font-size: .72rem; font-weight: 900; letter-spacing: .13em; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--aqua); box-shadow: 0 0 14px var(--aqua); }
+    .status.complete .status-dot { background: var(--gold); box-shadow: 0 0 14px var(--gold); }
+    .stats { display: flex; gap: 8px; }
+    .stat { min-width: 70px; padding: 8px 10px; border-radius: 14px; background: rgba(21, 14, 53, .68); border: 1px solid rgba(255,255,255,.1); text-align: right; }
+    .stat small { display: block; color: var(--muted); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; }
+    .stat strong { display: block; margin-top: 2px; color: var(--gold); font-size: 1.1rem; }
+    .controls { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+    .control-section { padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,.1); }
+    .control-section:last-child { padding-bottom: 0; border-bottom: 0; }
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--muted); font-size: .67rem; font-weight: 900; letter-spacing: .17em; text-transform: uppercase; }
+    .button-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    button { border: 1px solid rgba(255,255,255,.14); border-radius: 13px; padding: 11px 12px; color: var(--ink); background: rgba(255,255,255,.08); font: inherit; font-size: .8rem; font-weight: 800; cursor: pointer; transition: transform .16s ease, background .16s ease, border-color .16s ease; }
+    button:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.4); background: rgba(255,255,255,.15); }
+    button:active { transform: translateY(0) scale(.98); }
+    button:disabled { opacity: .44; cursor: wait; transform: none; }
+    .primary { color: #29154a; background: linear-gradient(135deg, var(--gold), #ff9b8c); border-color: transparent; }
+    .primary:hover { background: linear-gradient(135deg, #ffe28a, #ffb2a5); }
+    .solve { color: #1a2947; background: linear-gradient(135deg, var(--aqua), #8ff0ff); border-color: transparent; }
+    .wide { grid-column: span 2; }
+    .move-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .move { padding: 10px 4px; color: var(--gold); background: rgba(169,138,255,.13); }
+    .move b { display: block; color: var(--ink); font-size: 1rem; }
+    .move small { color: var(--muted); font-size: .6rem; }
+    .scramble-line { display: flex; align-items: center; min-height: 42px; padding: 9px 11px; border: 1px dashed rgba(255,210,105,.34); border-radius: 12px; color: var(--gold); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .69rem; line-height: 1.5; overflow-wrap: anywhere; }
+    .speed-line { display: flex; align-items: center; gap: 10px; }
+    input[type="range"] { width: 100%; accent-color: var(--pink); }
+    .speed-value { min-width: 40px; color: var(--pink); font: 800 .76rem ui-monospace, monospace; text-align: right; }
+    .log { max-height: 120px; overflow: auto; padding-right: 4px; font: .68rem/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--muted); }
+    .log span { color: var(--aqua); }
+    footer { margin-top: 13px; color: rgba(185,172,217,.7); font-size: .7rem; text-align: center; letter-spacing: .05em; }
+    @media (max-width: 780px) {
+      main { padding: 16px 12px 24px; }
+      header { align-items: start; flex-direction: column; gap: 10px; }
+      .badge { align-self: start; }
+      .layout { grid-template-columns: 1fr; }
+      .stage-card, #stage { min-height: 470px; }
+      .controls { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">a tiny spatial ritual</p>
+        <h1>PRISM <span>TWIST</span></h1>
+        <p class="tagline">Turn the light. Follow the trail. Bring every facet home.</p>
+      </div>
+      <div class="badge">3 × 3 / PUBLIC-V1</div>
+    </header>
+
+    <div class="layout">
+      <section class="card stage-card" aria-label="Interactive prism puzzle">
+        <canvas id="stage" aria-label="3D prism puzzle; drag to orbit"></canvas>
+        <div class="hud">
+          <div id="status" class="status"><i class="status-dot"></i><span id="statusText">READY</span></div>
+          <div class="stats">
+            <div class="stat"><small>moves</small><strong id="moveCount">0</strong></div>
+            <div class="stat"><small>chain</small><strong id="chainCount">0</strong></div>
+          </div>
+        </div>
+        <div class="stage-tip">DRAG TO ORBIT · KEYS U R F D L B · SHIFT = REVERSE</div>
+      </section>
+
+      <aside class="card controls">
+        <section class="control-section">
+          <div class="section-title"><span>ritual controls</span><span>01</span></div>
+          <div class="button-row">
+            <button id="scrambleButton" class="primary">✦ Scramble</button>
+            <button id="solveButton" class="solve">↯ Solve</button>
+            <button id="pauseButton">Ⅱ Pause</button>
+            <button id="replayButton">↻ Replay</button>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title"><span>tempo</span><span id="speedValue">1.0×</span></div>
+          <div class="speed-line"><span>slow</span><input id="speed" type="range" min="0.5" max="3" step="0.5" value="1"><span>fast</span></div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title"><span>face turns</span><span>02</span></div>
+          <div id="moveGrid" class="move-grid">
+            <button class="move" data-move="U"><b>U</b><small>up</small></button>
+            <button class="move" data-move="R"><b>R</b><small>right</small></button>
+            <button class="move" data-move="F"><b>F</b><small>front</small></button>
+            <button class="move" data-move="D"><b>D</b><small>down</small></button>
+            <button class="move" data-move="L"><b>L</b><small>left</small></button>
+            <button class="move" data-move="B"><b>B</b><small>back</small></button>
+          </div>
+          <div class="button-row" style="margin-top:8px">
+            <button id="inverseButton" class="wide">↶ Reverse selected face</button>
+            <button id="doubleButton" class="wide">⟳ Double selected face</button>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title"><span>seeded trail</span><span>03</span></div>
+          <div id="scrambleLine" class="scramble-line" aria-live="polite">U · R · F · D · L · B</div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title"><span>event log</span><span id="logCount">0</span></div>
+          <div id="logView" class="log" aria-live="polite">No turns yet — the prism is resting.</div>
+        </section>
+      </aside>
+    </div>
+    <footer>Every color shift is a real face rotation · no shortcuts in the prism</footer>
+  </main>
+
+  <script type="module">
+    import {
+      applyMove,
+      createSolved,
+      generateScramble,
+      invertAlgorithm,
+      isSolved,
+    } from "./engine.mjs";
+
+    const PUBLIC_SEED = 0x00C0FFEE;
+    const PUBLIC_LENGTH = 25;
+    const FACE_NAMES = ["U", "R", "F", "D", "L", "B"];
+    const FACE_INFO = [
+      { normal: [0, 1, 0], right: [1, 0, 0], up: [0, 0, -1] },
+      { normal: [1, 0, 0], right: [0, 0, -1], up: [0, 1, 0] },
+      { normal: [0, 0, 1], right: [1, 0, 0], up: [0, 1, 0] },
+      { normal: [0, -1, 0], right: [1, 0, 0], up: [0, 0, 1] },
+      { normal: [-1, 0, 0], right: [0, 0, 1], up: [0, 1, 0] },
+      { normal: [0, 0, -1], right: [-1, 0, 0], up: [0, 1, 0] },
+    ];
+    const MOVE_LAYERS = {
+      U: ["y", 1], R: ["x", 1], F: ["z", 1],
+      D: ["y", -1], L: ["x", -1], B: ["z", -1],
+    };
+    const STICKER_COLORS = ["#ff79b7", "#a889ff", "#54e9cf", "#ffd269", "#ff9b63", "#69c8ff"];
+
+    const canvas = document.querySelector("#stage");
+    const ctx = canvas.getContext("2d");
+    const statusEl = document.querySelector("#status");
+    const statusTextEl = document.querySelector("#statusText");
+    const moveCountEl = document.querySelector("#moveCount");
+    const chainCountEl = document.querySelector("#chainCount");
+    const logCountEl = document.querySelector("#logCount");
+    const logViewEl = document.querySelector("#logView");
+    const scrambleLineEl = document.querySelector("#scrambleLine");
+    const speedEl = document.querySelector("#speed");
+    const speedValueEl = document.querySelector("#speedValue");
+    const pauseButton = document.querySelector("#pauseButton");
+    const actionButtons = [...document.querySelectorAll("button")];
+
+    let state = createSolved();
+    let scrambleTokens = generateScramble(PUBLIC_SEED, PUBLIC_LENGTH);
+    let eventLog = [];
+    let selectedFace = "U";
+    let speed = 1;
+    let yaw = -0.62;
+    let pitch = 0.46;
+    let width = 0;
+    let height = 0;
+    let dpr = 1;
+    let activeRun = null;
+    let runEpoch = 0;
+    let paused = false;
+    let activeMove = null;
+    let turnProgress = 0;
+    let pointer = null;
+
+    const cloneState = (value) => new Uint8Array(value);
+    const cloneTokens = () => scrambleTokens.slice();
+    const axisIndex = (axis) => axis === "x" ? 0 : axis === "y" ? 1 : 2;
+    const positionFor = (face, row, col) => {
+      const { normal, right, up } = FACE_INFO[face];
+      return [
+        normal[0] + (col - 1) * right[0] + (1 - row) * up[0],
+        normal[1] + (col - 1) * right[1] + (1 - row) * up[1],
+        normal[2] + (col - 1) * right[2] + (1 - row) * up[2],
+      ];
+    };
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = Math.max(1, rect.width);
+      height = Math.max(1, rect.height);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      render();
+    }
+
+    function transform(point) {
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const cp = Math.cos(pitch), sp = Math.sin(pitch);
+      const x = point[0] * cy + point[2] * sy;
+      const z = -point[0] * sy + point[2] * cy;
+      const y = point[1] * cp - z * sp;
+      const depth = point[1] * sp + z * cp;
+      const scale = Math.min(width, height) * .245;
+      return { x: width * .48 + x * scale, y: height * .53 - y * scale, depth };
+    }
+
+    function polygonPath(points) {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
+      ctx.closePath();
+    }
+
+    function render() {
+      if (!ctx || !width || !height) return;
+      ctx.clearRect(0, 0, width, height);
+      const glow = ctx.createRadialGradient(width * .5, height * .48, 10, width * .5, height * .48, Math.max(width, height) * .6);
+      glow.addColorStop(0, "rgba(169,138,255,.13)");
+      glow.addColorStop(1, "rgba(169,138,255,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, width, height);
+
+      const stickers = [];
+      for (let face = 0; face < 6; face += 1) {
+        const { right, up } = FACE_INFO[face];
+        for (let row = 0; row < 3; row += 1) {
+          for (let col = 0; col < 3; col += 1) {
+            const center = positionFor(face, row, col);
+            const corners = [
+              [-.43, -.43], [.43, -.43], [.43, .43], [-.43, .43],
+            ].map(([r, u]) => transform([
+              center[0] + r * right[0] + u * up[0],
+              center[1] + r * right[1] + u * up[1],
+              center[2] + r * right[2] + u * up[2],
+            ]));
+            stickers.push({ face, row, col, center: transform(center), corners, depth: corners.reduce((sum, p) => sum + p.depth, 0) / 4 });
+          }
+        }
+      }
+      stickers.sort((a, b) => a.depth - b.depth);
+      for (const sticker of stickers) {
+        polygonPath(sticker.corners);
+        ctx.fillStyle = STICKER_COLORS[state[sticker.face * 9 + sticker.row * 3 + sticker.col]];
+        ctx.shadowColor = "rgba(5, 3, 25, .45)";
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 4;
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "rgba(30, 15, 67, .7)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,.2)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sticker.corners[0].x, sticker.corners[0].y);
+        ctx.lineTo(sticker.corners[1].x, sticker.corners[1].y);
+        ctx.stroke();
+      }
+
+      if (activeMove && turnProgress > 0) {
+        const [axis, layer] = MOVE_LAYERS[activeMove[0]];
+        const index = axisIndex(axis);
+        const layerStickers = stickers.filter((sticker) => positionFor(sticker.face, sticker.row, sticker.col)[index] === layer);
+        ctx.save();
+        ctx.globalAlpha = .12 + turnProgress * .17;
+        for (const sticker of layerStickers) {
+          polygonPath(sticker.corners);
+          ctx.fillStyle = "#fff3b0";
+          ctx.fill();
+        }
+        ctx.restore();
+        const pulse = 18 + turnProgress * 14;
+        ctx.save();
+        ctx.globalAlpha = .16 * (1 - turnProgress * .25);
+        ctx.strokeStyle = "#ffd269";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(width * .48, height * .53, Math.min(width, height) * .31 + pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      const solvedNow = isSolved(state);
+      const completedEvent = eventLog.length > 0 && eventLog[eventLog.length - 1].solved && solvedNow;
+      if (completedEvent && !activeRun) {
+        ctx.save();
+        ctx.globalAlpha = .22;
+        ctx.strokeStyle = "#ffd269";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([5, 9]);
+        ctx.beginPath();
+        ctx.arc(width * .48, height * .53, Math.min(width, height) * .39, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      updateHud(solvedNow, completedEvent);
+    }
+
+    function updateHud(solvedNow, completedEvent) {
+      const running = Boolean(activeRun);
+      const status = running ? (paused ? "PAUSED" : activeRun.label) : completedEvent ? "COMPLETE" : eventLog.length ? (solvedNow ? "READY" : "TWISTED") : "READY";
+      statusTextEl.textContent = status;
+      statusEl.classList.toggle("complete", completedEvent);
+      moveCountEl.textContent = String(eventLog.length);
+      chainCountEl.textContent = String(eventLog.length);
+      logCountEl.textContent = String(eventLog.length);
+      pauseButton.textContent = paused ? "▶ Resume" : "Ⅱ Pause";
+      actionButtons.forEach((button) => {
+        if (button !== pauseButton) button.disabled = running;
+      });
+      const recent = eventLog.slice(-7);
+      logViewEl.innerHTML = recent.length
+        ? recent.map((entry) => `<div><span>${String(entry.seq).padStart(2, "0")}</span> · ${entry.token} · ${entry.solved ? "SOLVED" : "turned"}</div>`).join("")
+        : "No turns yet — the prism is resting.";
+      scrambleLineEl.textContent = scrambleTokens.join("  ·  ");
+    }
+
+    function current(op) {
+      return activeRun === op && op.epoch === runEpoch && !op.cancelled;
+    }
+
+    function animateStep(op, token) {
+      return new Promise((resolve) => {
+        let finished = false;
+        let frame = 0;
+        const frameCount = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? 1 : Math.max(1, Math.round(6 / speed));
+        const finish = (ok) => {
+          if (finished) return;
+          finished = true;
+          if (op.rafId !== null) cancelAnimationFrame(op.rafId);
+          op.rafId = null;
+          op.cancelWait = null;
+          activeMove = null;
+          turnProgress = 0;
+          if (current(op)) render();
+          resolve(ok);
+        };
+        op.cancelWait = () => finish(false);
+        const tick = () => {
+          op.rafId = null;
+          if (!current(op)) return finish(false);
+          if (!paused) {
+            frame += 1;
+            activeMove = token;
+            turnProgress = Math.min(1, frame / frameCount);
+            render();
+          }
+          if (frame >= frameCount) return finish(true);
+          op.rafId = requestAnimationFrame(tick);
+        };
+        op.rafId = requestAnimationFrame(tick);
+      });
+    }
+
+    function waitForPaint(op) {
+      return new Promise((resolve) => {
+        if (!current(op)) return resolve(false);
+        op.paintWait = () => resolve(false);
+        op.paintRaf = requestAnimationFrame(() => {
+          op.paintRaf = null;
+          op.paintWait = null;
+          resolve(current(op));
+        });
+      });
+    }
+
+    function runSequence(tokens, label) {
+      if (activeRun) return activeRun.promise;
+      const op = { epoch: runEpoch, label, cancelled: false, rafId: null, paintRaf: null, cancelWait: null, paintWait: null, promise: null };
+      // Register before entering the async body: the first synchronous check
+      // must see this operation as current.
+      activeRun = op;
+      op.promise = (async () => {
+        for (const token of tokens) {
+          if (!current(op)) return snapshot();
+          const animated = await animateStep(op, token);
+          if (!animated || !current(op)) return snapshot();
+          const next = applyMove(state, token);
+          state = next;
+          eventLog.push({ seq: eventLog.length + 1, token, state: cloneState(state), solved: isSolved(state) });
+          render();
+        }
+        await waitForPaint(op);
+        if (current(op)) {
+          activeRun = null;
+          activeMove = null;
+          turnProgress = 0;
+          render();
+        }
+        return snapshot();
+      })();
+      op.promise.then(() => {
+        if (activeRun === op) {
+          activeRun = null;
+          activeMove = null;
+          turnProgress = 0;
+          render();
+        }
+      }, () => {
+        if (activeRun === op) activeRun = null;
+      });
+      return op.promise;
+    }
+
+    function snapshot() {
+      const solvedNow = isSolved(state);
+      const landed = solvedNow && eventLog.length > 0 && eventLog[eventLog.length - 1].solved === true;
+      return {
+        state: cloneState(state),
+        solved: solvedNow,
+        landed,
+        chain: eventLog.length,
+        status: activeRun ? (paused ? "PAUSED" : activeRun.label) : landed ? "COMPLETE" : eventLog.length ? "TWISTED" : "READY",
+        scramble: cloneTokens(),
+        eventCount: eventLog.length,
+      };
+    }
+
+    function logCopy() {
+      return eventLog.map((entry) => ({
+        seq: entry.seq,
+        token: entry.token,
+        state: cloneState(entry.state),
+        solved: entry.solved,
+      }));
+    }
+
+    function reset() {
+      runEpoch += 1;
+      if (activeRun) {
+        const old = activeRun;
+        old.cancelled = true;
+        if (old.rafId !== null) cancelAnimationFrame(old.rafId);
+        if (old.paintRaf !== null) cancelAnimationFrame(old.paintRaf);
+        old.cancelWait?.();
+        old.paintWait?.();
+      }
+      activeRun = null;
+      paused = false;
+      activeMove = null;
+      turnProgress = 0;
+      state = createSolved();
+      scrambleTokens = generateScramble(PUBLIC_SEED, PUBLIC_LENGTH);
+      eventLog = [];
+      render();
+      return snapshot();
+    }
+
+    function scramble() {
+      return runSequence(cloneTokens(), "SCRAMBLING");
+    }
+
+    function play() {
+      return runSequence(invertAlgorithm(cloneTokens()), "SOLVING");
+    }
+
+    function runChallenge() {
+      reset();
+      return (async () => {
+        await scramble();
+        return play();
+      })();
+    }
+
+    function manual(token) {
+      if (activeRun) return activeRun.promise;
+      return runSequence([token], "MANUAL");
+    }
+
+    document.querySelector("#scrambleButton").addEventListener("click", () => {
+      if (activeRun) return;
+      reset();
+      scramble();
+    });
+    document.querySelector("#solveButton").addEventListener("click", () => { if (!activeRun) play(); });
+    document.querySelector("#pauseButton").addEventListener("click", () => {
+      if (!activeRun) return;
+      paused = !paused;
+      render();
+    });
+    document.querySelector("#replayButton").addEventListener("click", () => { if (!activeRun) runChallenge(); });
+    speedEl.addEventListener("input", () => {
+      speed = Number(speedEl.value);
+      speedValueEl.textContent = `${speed.toFixed(1)}×`;
+    });
+    document.querySelectorAll("[data-move]").forEach((button) => {
+      button.addEventListener("click", () => {
+        selectedFace = button.dataset.move;
+        manual(selectedFace);
+      });
+    });
+    document.querySelector("#inverseButton").addEventListener("click", () => manual(`${selectedFace}'`));
+    document.querySelector("#doubleButton").addEventListener("click", () => manual(`${selectedFace}2`));
+    window.addEventListener("keydown", (event) => {
+      if (event.target instanceof HTMLInputElement) return;
+      const face = event.key.toUpperCase();
+      if (!FACE_NAMES.includes(face)) return;
+      event.preventDefault();
+      selectedFace = face;
+      manual(event.shiftKey ? `${face}'` : face);
+    });
+    canvas.addEventListener("pointerdown", (event) => {
+      pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (!pointer || pointer.id !== event.pointerId) return;
+      yaw += (event.clientX - pointer.x) * .012;
+      pitch = Math.max(-1.15, Math.min(1.15, pitch + (event.clientY - pointer.y) * .009));
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
+      render();
+    });
+    canvas.addEventListener("pointerup", () => { pointer = null; });
+    canvas.addEventListener("pointercancel", () => { pointer = null; });
+    window.addEventListener("resize", resize);
+
+    window.__LIGHTBENCH__ = {
+      reset,
+      scramble,
+      play,
+      runChallenge,
+      run: runChallenge,
+      snapshot,
+      log: logCopy,
+    };
+    reset();
+    resize();
+  </script>
+</body>
+</html>

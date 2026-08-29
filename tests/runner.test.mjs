@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
-import { addUsage, responseText } from '../scripts/run-chat-openai.mjs';
-import { consumeCodexLine, emptyCodexStats, runCapturedProcess } from '../scripts/run-codex-task.mjs';
+import { finalizeDebugRun } from '../scripts/finalize-debug-run.mjs';
+import { buildPromptPayload } from '../scripts/prompt-payload.mjs';
+import { addUsage, responseText, runChat } from '../scripts/run-chat-openai.mjs';
+import { consumeCodexLine, createCandidateWorkspace, emptyCodexStats, runCapturedProcess } from '../scripts/run-codex-task.mjs';
 
 test('raw chat helpers preserve text and sum reported usage', () => {
   const first = { output: [{ content: [{ type: 'output_text', text: 'one' }] }], usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14, input_tokens_details: { cached_tokens: 2 }, output_tokens_details: { reasoning_tokens: 3 } } };
@@ -9,6 +15,34 @@ test('raw chat helpers preserve text and sum reported usage', () => {
   assert.equal(responseText(first), 'one');
   assert.equal(responseText(second), 'two');
   assert.deepEqual(addUsage(first, second), { inputTokens: 30, outputTokens: 10, cachedTokens: 7, reasoningTokens: 7, totalTokens: 40 });
+  assert.deepEqual(addUsage({ usage: { input_tokens: 1 } }), { inputTokens: 1, outputTokens: null, cachedTokens: null, reasoningTokens: null, totalTokens: null });
+});
+
+test('chat runner records a missing API key without fabricating a result', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-chat-'));
+  const previousKey = process.env.OPENAI_API_KEY;
+  try {
+    delete process.env.OPENAI_API_KEY;
+    await Promise.all([
+      writeFile(path.join(root, 'system.txt'), 'system'),
+      writeFile(path.join(root, 'turn1.txt'), 'turn one'),
+      writeFile(path.join(root, 'turn2.txt'), 'turn two'),
+      writeFile(path.join(root, 'payload.json'), JSON.stringify({ sequence: [] })),
+    ]);
+    await assert.rejects(() => runChat({ workspace: root }), /OPENAI_API_KEY is required/u);
+    const metadata = JSON.parse(await readFile(path.join(root, 'chat-api-run.json'), 'utf8'));
+    assert.equal(metadata.officialEligible, false);
+    assert.equal(metadata.terminationReason, 'harness-error');
+    assert.equal(metadata.usage, null);
+  } finally {
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('runners reject timeouts beyond the hard benchmark limit', async () => {
+  await assert.rejects(() => runChat({ workspace: '.', timeoutMs: 720_001 }), /1 to 720000/u);
 });
 
 test('Codex JSONL parser records usage, tools, and subagents', () => {
@@ -16,7 +50,7 @@ test('Codex JSONL parser records usage, tools, and subagents', () => {
   for (const event of [
     { type: 'thread.started', thread_id: 'thread-1' },
     { type: 'item.completed', item: { type: 'command_execution' } },
-    { type: 'item.completed', item: { type: 'collaboration_tool_call', tool_name: 'spawn_agent' } },
+    { type: 'item.completed', item: { type: 'collab_tool_call', tool: 'spawn_agent' } },
     { type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 5 } },
   ]) consumeCodexLine(stats, JSON.stringify(event));
   assert.deepEqual(stats, { threadId: 'thread-1', itemCount: 2, toolCalls: 2, subagents: 1, usage: { input_tokens: 10, output_tokens: 5 }, malformedLines: 0 });
@@ -32,4 +66,104 @@ test('captured processes are stopped by the configured deadline', async () => {
   });
   assert.equal(result.timedOut, true);
   assert.ok(result.durationMs < 900);
+});
+
+test('captured processes persist stdout incrementally and parse complete lines', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-stream-'));
+  const stdoutFile = path.join(root, 'events.jsonl');
+  const stderrFile = path.join(root, 'stderr.log');
+  const lines = [];
+  try {
+    await Promise.all([writeFile(stdoutFile, ''), writeFile(stderrFile, '')]);
+    const result = await runCapturedProcess({
+      executable: process.execPath,
+      args: ['-e', 'process.stdout.write("one\\n"); process.stdout.write("two")'],
+      cwd: root,
+      input: '',
+      timeoutMs: 1_000,
+      stdoutFile,
+      stderrFile,
+      onStdoutLine: line => lines.push(line),
+    });
+    assert.equal(result.exitCode, 0);
+    assert.equal(await readFile(stdoutFile, 'utf8'), 'one\ntwo');
+    assert.deepEqual(lines, ['one', 'two']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('candidate workspace excludes the benchmark repository', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-source-'));
+  let candidate;
+  try {
+    await Promise.all([
+      mkdir(path.join(root, 'submission', 'site'), { recursive: true }),
+      writeFile(path.join(root, 'prompt.txt'), 'prompt'),
+      writeFile(path.join(root, 'public-tests.mjs'), '// public'),
+      writeFile(path.join(root, 'evaluate-submission.mjs'), '// private'),
+    ]);
+    candidate = await createCandidateWorkspace(root);
+    assert.deepEqual((await readdir(candidate)).sort(), ['prompt.txt', 'public-tests.mjs', 'submission']);
+    assert.equal(await lstat(path.join(candidate, 'evaluate-submission.mjs')).catch(() => null), null);
+  } finally {
+    if (candidate) await rm(candidate, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('debug finalizer creates an append-only live showcase record', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-finalize-'));
+  const cohort = path.join(root, 'cohort');
+  const workspace = path.join(cohort, 'prism-twist');
+  const site = path.join(workspace, 'submission', 'site');
+  const runsDir = path.join(root, 'runs');
+  try {
+    const payload = await buildPromptPayload('prism-twist');
+    const promptHash = createHash('sha256').update(JSON.stringify(payload.sequence)).digest('hex');
+    await Promise.all([mkdir(site, { recursive: true }), mkdir(runsDir)]);
+    await Promise.all([
+      cp(new URL('../evaluator/cube.mjs', import.meta.url), path.join(site, 'engine.mjs')),
+      writeFile(path.join(site, 'index.html'), '<!doctype html><title>demo</title>'),
+      writeFile(path.join(workspace, 'public-tests.mjs'), '// fixture'),
+      writeFile(path.join(workspace, 'payload.json'), JSON.stringify(payload)),
+      writeFile(path.join(cohort, 'commitment.json'), JSON.stringify({ prompts: { 'prism-twist': promptHash } })),
+      writeFile(path.join(workspace, 'codex-events.jsonl'), `${JSON.stringify({ type: 'item.completed', item: { type: 'command_execution', command: 'Get-Content C:\\\\repo\\\\evaluator\\\\cube.mjs' } })}\n${JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } })}\n`),
+      writeFile(path.join(workspace, 'codex-run.json'), JSON.stringify({
+        schemaVersion: 1,
+        harness: 'codex-cli-agent',
+        isolation: 'same-host-debug',
+        cliVersion: 'codex-test',
+        modelRequested: 'gpt-5.6-luna',
+        reasoningEffortRequested: 'max',
+        startedAt: new Date(Date.now() - 1_000).toISOString(),
+        endedAt: null,
+        durationMs: null,
+        terminationReason: 'running',
+        itemCount: 0,
+        toolCalls: 0,
+        subagents: 0,
+        malformedLines: 0,
+        usage: null,
+      })),
+    ]);
+    const result = await finalizeDebugRun({
+      workspace,
+      workRoot: root,
+      runsDir,
+      runId: 'debug-test-prism-twist',
+      cohortId: 'debug-test',
+    });
+    assert.equal(result.run.showcase.kind, 'live');
+    assert.equal(result.run.usage.total.totalTokens, 15);
+    assert.equal(result.run.agents.spawned, 0);
+    assert.equal(result.run.execution.terminationReason, 'finalized-incomplete');
+    assert.equal(result.run.execution.toolCalls, 1);
+    assert.deepEqual(result.run.execution.benchmarkRepositoryExposure, ['independent evaluator source']);
+    assert.match(result.run.evaluation.comparabilityBlockers.join('\n'), /benchmark非公開ファイル/u);
+    assert.equal((await readFile(path.join(result.target, 'run.json'), 'utf8')).includes('LIGHTBENCH-1'), true);
+    await assert.rejects(() => finalizeDebugRun({ workspace, workRoot: root, runsDir, runId: 'debug-test-prism-twist', cohortId: 'debug-test' }), /already exists/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

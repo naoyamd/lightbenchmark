@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-max-live-20260829-japanese-chat",
+  "cohortId": "debug-luna-max-live-20260829",
+  "taskId": "japanese-chat",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-29T14:46:20.059Z",
+    "endedAt": "2026-08-29T14:46:20.060Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 1,
+    "agentSteps": 0,
+    "toolCalls": 0,
+    "terminationReason": "harness-error",
+    "lane": "autonomous",
+    "harness": "openai-responses-api",
+    "isolation": "tools-disabled-api",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 1,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [],
+  "showcase": null,
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "JP-1.0",
+    "commonPrompt": null,
+    "runner": "openai-responses-api",
+    "evaluator": "in-repository-v1"
+  },
+  "hashes": {
+    "prompt": "47e11d62fbba12e1fb1948b0655d449e5003521f4530308033f86a91e705e73a",
+    "starter": null,
+    "candidateSite": null,
+    "evaluator": "e373e1332593ec3b7debeef459b4ce56850969035cb40b07dd84a1025bcf2222",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": false,
+      "reason": "回答未取得または64 KiB超過のため表示できません"
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。"
+    ],
+    "measurementFailures": [
+      "OPENAI_API_KEY is required"
+    ],
+    "deterministicChecks": null,
+    "headline": {
+      "pass": false,
+      "reason": "2ターンの回答が揃っていません"
+    }
+  }
+}

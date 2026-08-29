@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Lander Pop — tiny descent lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #eef4ff;
+      --muted: #9ba9c7;
+      --panel: rgba(14, 24, 52, .78);
+      --line: rgba(166, 188, 235, .2);
+      --cyan: #6de8ff;
+      --pink: #ff78bd;
+      --lime: #a9f579;
+      --amber: #ffd166;
+      --danger: #ff6b7f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 18% 10%, #273a75 0, #111a3a 37%, #070b1c 100%);
+    }
+    .app { width: min(1180px, 100%); margin: 0 auto; padding: 20px; }
+    header { display:flex; justify-content:space-between; align-items:end; gap:16px; margin-bottom:16px; }
+    h1 { margin:0; letter-spacing:.05em; font-size:clamp(26px,4vw,42px); }
+    h1 span { color:var(--pink); }
+    .eyebrow { margin:0 0 3px; color:var(--cyan); font-size:11px; letter-spacing:.18em; text-transform:uppercase; }
+    .note { color:var(--muted); text-align:right; font-size:12px; }
+    .grid { display:grid; grid-template-columns:minmax(0, 1.6fr) minmax(280px, .75fr); gap:16px; }
+    .card { border:1px solid var(--line); background:var(--panel); border-radius:18px; box-shadow:0 18px 60px rgba(0,0,0,.2); backdrop-filter:blur(9px); }
+    .sim-card { padding:12px; }
+    canvas { display:block; width:100%; height:auto; aspect-ratio: 1.72; border-radius:12px; background:#0a1230; }
+    .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 2px 0; }
+    button { border:1px solid rgba(170,200,255,.28); border-radius:999px; background:#1c2a56; color:var(--ink); padding:8px 14px; cursor:pointer; font:inherit; transition:.18s ease; }
+    button:hover { transform:translateY(-1px); border-color:var(--cyan); }
+    button.active { background:var(--cyan); color:#061329; border-color:var(--cyan); font-weight:700; }
+    button.primary { background:var(--pink); color:#280d25; border-color:var(--pink); font-weight:700; }
+    .readouts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px 2px 2px; }
+    .metric { padding:11px 12px; border:1px solid var(--line); border-radius:12px; background:rgba(5,12,32,.32); }
+    .metric small { display:block; color:var(--muted); font-size:11px; }
+    .metric strong { display:block; font-size:18px; margin-top:2px; }
+    .side { padding:18px; display:flex; flex-direction:column; gap:14px; }
+    .status { padding:14px; border-radius:14px; border:1px solid var(--cyan); background:rgba(109,232,255,.08); }
+    .status[data-kind="landed"] { border-color:var(--lime); background:rgba(169,245,121,.1); }
+    .status[data-kind="hard-crash"], .status[data-kind="off-pad"], .status[data-kind="tip-over"], .status[data-kind="out-of-bounds"] { border-color:var(--danger); background:rgba(255,107,127,.1); }
+    .status[data-kind="timeout"] { border-color:var(--amber); background:rgba(255,209,102,.1); }
+    .status-label { color:var(--muted); font-size:11px; letter-spacing:.16em; text-transform:uppercase; }
+    .status-value { font-size:28px; font-weight:800; margin-top:2px; }
+    .status-detail { color:var(--muted); margin-top:3px; }
+    .telemetry { border-top:1px solid var(--line); padding-top:14px; }
+    .telemetry h2 { font-size:14px; margin:0 0 10px; }
+    .bar { height:8px; border-radius:9px; overflow:hidden; background:#0a1130; border:1px solid var(--line); }
+    .bar i { display:block; height:100%; width:0; border-radius:inherit; background:linear-gradient(90deg,var(--pink),var(--amber),var(--lime)); transition:width .12s linear; }
+    .legend { color:var(--muted); font-size:12px; margin-top:7px; }
+    .foot { color:var(--muted); font-size:11px; margin-top:16px; text-align:center; }
+    @media (max-width:760px) { .app{padding:12px}.grid{grid-template-columns:1fr}header{align-items:start;flex-direction:column}.note{text-align:left}.readouts{grid-template-columns:repeat(2,1fr)} }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div><p class="eyebrow">deterministic descent / public-v1</p><h1>Lander <span>Pop</span></h1></div>
+      <div class="note">教育用toy simulation・実飛行に使用不可</div>
+    </header>
+    <section class="grid">
+      <div class="card sim-card">
+        <canvas id="scene" width="860" height="500" aria-label="ロケット着陸シミュレーション"></canvas>
+        <div class="controls" aria-label="simulation controls">
+          <button class="primary" id="run">Launch / Run</button>
+          <button id="pause">Pause</button>
+          <button id="replay">Replay</button>
+          <span style="flex:1"></span>
+          <button class="speed active" data-speed="1">x1</button>
+          <button class="speed" data-speed="4">x4</button>
+          <button class="speed" data-speed="16">x16</button>
+        </div>
+      </div>
+      <aside class="card side">
+        <div class="status" id="status" data-kind="flying">
+          <div class="status-label">flight status</div>
+          <div class="status-value" id="statusValue">READY</div>
+          <div class="status-detail" id="statusDetail">autopilot standing by</div>
+        </div>
+        <div class="telemetry">
+          <h2>Flight telemetry</h2>
+          <div class="metric"><small>ALTITUDE</small><strong id="altitude">—</strong></div>
+          <div class="metric"><small>FUEL</small><strong id="fuel">—</strong></div>
+          <div class="bar"><i id="fuelBar"></i></div>
+          <p class="legend">estimated velocity <strong id="estimated">—</strong></p>
+          <p class="legend">true velocity <strong id="trueVelocity">hidden until landing</strong></p>
+          <p class="legend">attitude <strong id="attitude">—</strong></p>
+        </div>
+      </aside>
+    </section>
+    <p class="foot">Fixed-step physics · sensor-only controller · wind is part of the toy world ✦</p>
+  </main>
+  <script type="module">
+    import { createScenario, stepPhysics, makeSensor, classify } from "./sim.mjs";
+    import { createController } from "./controller.mjs";
+
+    const SEED = 0x5eed1234;
+    const canvas = document.querySelector("#scene");
+    const ctx = canvas.getContext("2d");
+    const els = {
+      status: document.querySelector("#status"), statusValue: document.querySelector("#statusValue"), statusDetail: document.querySelector("#statusDetail"),
+      altitude: document.querySelector("#altitude"), fuel: document.querySelector("#fuel"), fuelBar: document.querySelector("#fuelBar"), estimated: document.querySelector("#estimated"), trueVelocity: document.querySelector("#trueVelocity"), attitude: document.querySelector("#attitude"),
+    };
+    let runtime;
+    let rafId = 0;
+    let generation = 0;
+    let speed = 1;
+    let paused = false;
+    let runPromise = null;
+    let pendingResolve = null;
+
+    const copy = (value) => value === undefined ? undefined : structuredClone(value);
+    const statusLabel = (status) => ({ flying:"FLYING", landed:"LANDED · SUCCESS", "hard-crash":"HARD CRASH", "off-pad":"OFF PAD", "tip-over":"TIP-OVER", "out-of-bounds":"OUT OF BOUNDS", timeout:"TIMEOUT" }[status] || status.toUpperCase());
+    const statusDetail = (status) => status === "flying" ? "controller is steering from rounded observations" : status === "landed" ? "all landing limits satisfied" : "terminal state reached by the physics oracle";
+    const deg = (radians) => `${(radians * 180 / Math.PI).toFixed(1)}°`;
+
+    function freshRuntime() {
+      const scenario = createScenario(SEED);
+      return { params: scenario.params, state: scenario.state, status: classify(scenario.state, scenario.params), controller: createController(), eventLog: [], lastSensor: null, lastControl: { throttle: 0, gimbal: 0 }, trajectory: [{ x: scenario.state.x, y: scenario.state.y }] };
+    }
+
+    function estimatedVelocity() {
+      const observations = [];
+      for (const event of runtime.eventLog) {
+        if (!event.sensor) continue;
+        const last = observations[observations.length - 1];
+        if (!last || event.sensor.t !== last.t) observations.push(event.sensor);
+      }
+      if (observations.length < 2) return null;
+      const a = observations[Math.max(0, observations.length - 5)];
+      const b = observations[observations.length - 1];
+      const dt = b.t - a.t;
+      return dt > 0 ? { vx: (b.xOffset - a.xOffset) / dt, vy: (b.altitude - a.altitude) / dt } : null;
+    }
+
+    function draw() {
+      if (!runtime) return;
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const sky = ctx.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, "#172c63"); sky.addColorStop(1, "#080d24"); ctx.fillStyle = sky; ctx.fillRect(0,0,w,h);
+      const ground = h - 48;
+      ctx.fillStyle = "#0d1735"; ctx.fillRect(0, ground, w, h-ground);
+      ctx.strokeStyle = "rgba(159,190,255,.13)"; ctx.lineWidth = 1;
+      for (let i=0;i<9;i++) { const y=40+i*52; ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke(); }
+      for (let i=0;i<12;i++) { const x=i*w/11; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,ground);ctx.stroke(); }
+
+      const sx = w / 120;
+      const worldX = (x) => w/2 + x*sx;
+      const worldY = (y) => ground - Math.max(-4, Math.min(125,y)) * (ground-28) / 125;
+      const padX = worldX(runtime.params.padX), padWidth = runtime.params.padHalf * 2 * sx;
+      ctx.fillStyle = "#a9f579"; ctx.fillRect(padX-padWidth/2, ground-5, padWidth, 5); ctx.fillStyle="rgba(169,245,121,.3)"; ctx.fillRect(padX-padWidth/2-8,ground,padWidth+16,2);
+      ctx.font = "11px system-ui"; ctx.fillStyle="rgba(200,220,255,.65)"; ctx.fillText("PAD", padX-15, ground+22);
+
+      if (runtime.trajectory.length > 1) { ctx.beginPath(); runtime.trajectory.forEach((point,i)=>{const px=worldX(point.x),py=worldY(point.y); if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}); ctx.strokeStyle="rgba(109,232,255,.72)"; ctx.lineWidth=2; ctx.setLineDash([4,5]); ctx.stroke(); ctx.setLineDash([]); }
+      const state = runtime.state, rx=worldX(state.x), ry=worldY(state.y);
+      ctx.save(); ctx.translate(rx,ry); ctx.rotate(state.theta);
+      const flame = runtime.status === "flying" && runtime.lastControl.throttle > .03;
+      if (flame) { const f=14+25*runtime.lastControl.throttle; ctx.fillStyle="#ffd166"; ctx.beginPath();ctx.moveTo(-6,17);ctx.lineTo(6,17);ctx.lineTo(0,17+f);ctx.closePath();ctx.fill();ctx.fillStyle="#ff78bd";ctx.beginPath();ctx.moveTo(-3,18);ctx.lineTo(3,18);ctx.lineTo(0,18+f*.65);ctx.closePath();ctx.fill(); }
+      ctx.fillStyle="#edf4ff"; ctx.strokeStyle="#6de8ff"; ctx.lineWidth=2; ctx.beginPath();ctx.roundRect(-8,-19,16,38,7);ctx.fill();ctx.stroke();
+      ctx.fillStyle="#ff78bd";ctx.beginPath();ctx.moveTo(-8,-10);ctx.lineTo(-16,13);ctx.lineTo(-8,11);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(8,-10);ctx.lineTo(16,13);ctx.lineTo(8,11);ctx.closePath();ctx.fill();
+      ctx.fillStyle="#172c63";ctx.beginPath();ctx.arc(0,-9,4,0,Math.PI*2);ctx.fill(); ctx.restore();
+      // wind ribbons
+      const wind = runtime.params.windAmp * Math.sin(.31*state.t + runtime.params.phase);
+      ctx.strokeStyle="rgba(255,209,102,.55)"; ctx.lineWidth=2; for(let i=0;i<3;i++){const yy=70+i*14, drift=wind*85;ctx.beginPath();ctx.moveTo(22,yy);ctx.quadraticCurveTo(75,yy-8,130+drift,yy);ctx.stroke();}
+      ctx.fillStyle="rgba(220,235,255,.75)"; ctx.fillText(`wind ${wind.toFixed(2)} m/s`, 22, 42);
+    }
+
+    function render() {
+      if (!runtime) return;
+      const state=runtime.state, status=runtime.status, estimate=estimatedVelocity();
+      els.status.dataset.kind=status; els.statusValue.textContent=statusLabel(status); els.statusDetail.textContent=statusDetail(status);
+      els.altitude.textContent=`${Math.max(0,state.y).toFixed(2)} m`;
+      els.fuel.textContent=`${Math.max(0,state.fuel).toFixed(3)}`; els.fuelBar.style.width=`${Math.max(0,Math.min(100,state.fuel/runtime.params.fuel0*100))}%`;
+      els.estimated.textContent=estimate ? `vx ${estimate.vx.toFixed(1)} · vy ${estimate.vy.toFixed(1)} m/s` : "collecting observations";
+      els.trueVelocity.textContent=status === "flying" ? "hidden until landing" : `vx ${state.vx.toFixed(2)} · vy ${state.vy.toFixed(2)} m/s`;
+      els.attitude.textContent=`${deg(state.theta)} · ω ${deg(state.omega)}/s`;
+      draw();
+    }
+
+    function appendPhysicsStep(sensor, control) {
+      const nextState=stepPhysics(runtime.state, control, runtime.params);
+      const status=classify(nextState, runtime.params);
+      const event={ step: runtime.eventLog.length, t: nextState.t, state: copy(nextState), sensor: copy(sensor), control: copy(control), status };
+      runtime.state=nextState; runtime.status=status; runtime.lastSensor=sensor; runtime.lastControl=control; runtime.eventLog.push(event); runtime.trajectory.push({x:nextState.x,y:nextState.y});
+      if(runtime.trajectory.length>500)runtime.trajectory.shift();
+    }
+
+    function stopAnimation() {
+      generation += 1;
+      if(rafId)cancelAnimationFrame(rafId);
+      rafId=0;
+      if(document.getAnimations)document.getAnimations().forEach((animation)=>animation.cancel());
+      if(pendingResolve){pendingResolve(snapshot());pendingResolve=null;}
+      runPromise=null;
+    }
+
+    function reset() {
+      stopAnimation(); paused=false; runtime=freshRuntime(); render(); return snapshot();
+    }
+
+    function finish(resolve, token) {
+      if (token !== generation) return;
+      rafId=requestAnimationFrame(()=>{ if(token!==generation)return; render(); rafId=0; runPromise=null; pendingResolve=null; resolve(snapshot()); });
+    }
+
+    function run(options={}) {
+      if (runPromise) return runPromise;
+      const token=generation; paused=false;
+      const animate=options.animate !== false && options.animation !== false;
+      runPromise=new Promise((resolve)=>{
+        pendingResolve=resolve;
+        const tick=()=>{
+          if(token!==generation){pendingResolve=null;resolve(snapshot());return;}
+          if(paused){rafId=requestAnimationFrame(tick);return;}
+          const steps=animate ? Math.max(1, Math.round(5*speed)) : 1000;
+          for(let i=0;i<steps && runtime.status==="flying";i++){
+            if(runtime.eventLog.length%5===0){runtime.lastSensor=makeSensor(runtime.state,runtime.params);runtime.lastControl=runtime.controller.step(runtime.lastSensor);}
+            appendPhysicsStep(runtime.lastSensor,runtime.lastControl);
+          }
+          render();
+          if(runtime.status!=="flying" || runtime.eventLog.length>=1000){finish(resolve,token);return;}
+          rafId=animate ? requestAnimationFrame(tick) : requestAnimationFrame(tick);
+        };
+        rafId=requestAnimationFrame(tick);
+      });
+      return runPromise;
+    }
+
+    function pause(){paused=!paused;document.querySelector("#pause").textContent=paused?"Resume":"Pause";}
+    function snapshot(){return copy({state:runtime.state,params:runtime.params,status:runtime.status,eventLog:runtime.eventLog,log:runtime.eventLog,lastSensor:runtime.lastSensor,lastControl:runtime.lastControl,running:Boolean(runPromise),paused});}
+    function telemetry(){return copy(runtime.eventLog);}
+
+    window.__LIGHTBENCH__={reset,run,runChallenge:run,snapshot,telemetry,log:telemetry};
+    document.querySelector("#run").addEventListener("click",()=>{if(runtime.status!=="flying")reset();run();});
+    document.querySelector("#pause").addEventListener("click",pause);
+    document.querySelector("#replay").addEventListener("click",()=>{reset();run();});
+    document.querySelectorAll(".speed").forEach((button)=>button.addEventListener("click",()=>{speed=Number(button.dataset.speed);document.querySelectorAll(".speed").forEach(b=>b.classList.toggle("active",b===button));}));
+    reset();
+  </script>
+</body>
+</html>

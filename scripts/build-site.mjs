@@ -26,6 +26,9 @@ const artifactExtensions = {
   image: new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp']),
   video: new Set(['.m4v', '.mov', '.mp4', '.ogv', '.webm']),
 };
+const showcaseExtensions = new Set(['.html', '.css', '.js', '.mjs', '.json']);
+const liveShowcaseLimit = 2 * 1024 * 1024;
+const chatShowcaseLimit = 64 * 1024;
 
 function fail(location, message) {
   throw new Error(`${location}: ${message}`);
@@ -78,8 +81,9 @@ function relativeAssetPath(value, location) {
   const normalized = value.replace(/\\/g, '/');
   if (
     normalized.startsWith('/') ||
-    /^[A-Za-z]:\//.test(normalized) ||
+    /^[A-Za-z]:/.test(normalized) ||
     /^[A-Za-z][A-Za-z+.-]*:\/\//.test(normalized) ||
+    normalized.includes('\0') ||
     normalized.split('/').some(segment => !segment || segment === '.' || segment === '..')
   ) {
     fail(location, 'only relative paths are allowed');
@@ -146,11 +150,15 @@ function validateUsageBucket(bucket, location) {
   return normalized;
 }
 
-function validateAgents(agents, location) {
+function validateAgents(agents, location, allowIncomplete = false) {
   if (!isObject(agents)) fail(location, 'expected an object');
   const normalized = { ...agents };
-  for (const key of ['spawned', 'completed', 'failed', 'maxConcurrent']) {
-    normalized[key] = requiredNumber(requireKey(agents, key, location), `${location}.${key}`, true);
+  normalized.spawned = requiredNumber(requireKey(agents, 'spawned', location), `${location}.spawned`, true);
+  for (const key of ['completed', 'failed', 'maxConcurrent']) {
+    const value = requireKey(agents, key, location);
+    normalized[key] = allowIncomplete
+      ? nullableNumber(value, `${location}.${key}`, true)
+      : requiredNumber(value, `${location}.${key}`, true);
   }
 
   const items = requireKey(agents, 'items', location);
@@ -169,9 +177,57 @@ function validateAgents(agents, location) {
     normalizedItem.status = nullableString(requireKey(item, 'status', itemLocation), `${itemLocation}.status`);
     return normalizedItem;
   });
-  if (normalized.completed + normalized.failed > normalized.spawned) fail(location, 'completed + failed must not exceed spawned');
-  if (normalized.maxConcurrent > normalized.spawned) fail(`${location}.maxConcurrent`, 'must not exceed spawned');
+  if (normalized.completed !== null && normalized.failed !== null
+    && normalized.completed + normalized.failed > normalized.spawned) {
+    fail(location, 'completed + failed must not exceed spawned');
+  }
+  if (normalized.maxConcurrent !== null && normalized.maxConcurrent > normalized.spawned) {
+    fail(`${location}.maxConcurrent`, 'must not exceed spawned');
+  }
   if (normalized.items !== null && normalized.items.length !== normalized.spawned) fail(`${location}.items`, 'must list every spawned subagent');
+  return normalized;
+}
+
+function validateShowcase(value, location) {
+  if (value === undefined || value === null) return null;
+  if (!isObject(value)) fail(location, 'expected an object or null');
+  const kind = own(value, 'kind') ? value.kind : own(value, 'type') ? value.type : value.mode;
+  if (kind !== 'live' && kind !== 'chat') fail(`${location}.kind`, 'expected live or chat');
+  const normalized = { ...value, kind };
+  if (kind === 'live') {
+    normalized.entry = relativeAssetPath(requireKey(value, 'entry', location), `${location}.entry`);
+    if (path.extname(normalized.entry).toLowerCase() !== '.html') {
+      fail(`${location}.entry`, 'live entry must be an HTML file');
+    }
+    normalized.protocol = own(value, 'protocol') ? requiredString(value.protocol, `${location}.protocol`) : 'LIGHTBENCH-1';
+    if (normalized.protocol !== 'LIGHTBENCH-1') fail(`${location}.protocol`, 'expected LIGHTBENCH-1');
+    normalized.scenario = own(value, 'scenario') ? requiredString(value.scenario, `${location}.scenario`) : 'public-v1';
+    if (normalized.scenario !== 'public-v1') fail(`${location}.scenario`, 'expected public-v1');
+    for (const key of ['bundle', 'root', 'directory']) {
+      if (own(value, key)) normalized[key] = relativeAssetPath(value[key], `${location}.${key}`);
+    }
+    if (own(value, 'path')) normalized.path = relativeAssetPath(value.path, `${location}.path`);
+  } else {
+    if (own(value, 'turns')) {
+      if (!Array.isArray(value.turns) || value.turns.length === 0) fail(`${location}.turns`, 'expected a non-empty array');
+      normalized.turns = value.turns.map((turn, index) => {
+        const turnLocation = `${location}.turns[${index}]`;
+        if (!isObject(turn)) fail(turnLocation, 'expected an object');
+        const item = { ...turn };
+        item.label = requiredString(requireKey(turn, 'label', turnLocation), `${turnLocation}.label`);
+        item.path = relativeAssetPath(requireKey(turn, 'path', turnLocation), `${turnLocation}.path`);
+        if (path.extname(item.path).toLowerCase() !== '.txt') fail(`${turnLocation}.path`, 'chat showcase must be a .txt file');
+        return item;
+      });
+    } else {
+      // Keep accepting the original single-transcript form while normalizing it to turns.
+      const fileKey = own(value, 'path') ? 'path' : own(value, 'file') ? 'file' : own(value, 'transcript') ? 'transcript' : null;
+      if (!fileKey) fail(`${location}.turns`, 'chat showcase requires turns');
+      const transcript = relativeAssetPath(value[fileKey], `${location}.${fileKey}`);
+      if (path.extname(transcript).toLowerCase() !== '.txt') fail(`${location}.${fileKey}`, 'chat showcase must be a .txt file');
+      normalized.turns = [{ label: 'チャット', path: transcript }];
+    }
+  }
   return normalized;
 }
 
@@ -293,7 +349,7 @@ export function validateRun(input, source = 'run.json') {
     }
   }
 
-  run.agents = validateAgents(requireKey(input, 'agents', source), `${source}.agents`);
+  run.agents = validateAgents(requireKey(input, 'agents', source), `${source}.agents`, runKind === 'debug');
   const interventionKey = own(input, 'interventions') ? 'interventions' : own(input, 'intervention') ? 'intervention' : null;
   if (!interventionKey) fail(source, 'missing interventions');
   const interventions = requireKey(input, interventionKey, source);
@@ -301,6 +357,7 @@ export function validateRun(input, source = 'run.json') {
   delete run.intervention;
   run.interventions = interventions;
   run.artifacts = validateArtifacts(input.artifacts, `${source}.artifacts`);
+  run.showcase = validateShowcase(input.showcase, `${source}.showcase`);
   for (const key of ['versions', 'hashes', 'evaluation']) {
     validateObjectOrNull(requireKey(input, key, source), `${source}.${key}`);
   }
@@ -456,6 +513,197 @@ async function copyPrompts(source, target) {
   }
 }
 
+function decodeUtf8(bytes, location) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    fail(location, 'showcase file must be valid UTF-8');
+  }
+}
+
+function insideDirectory(parent, relative, location) {
+  const source = path.resolve(parent, ...relative.split('/'));
+  const actual = path.relative(parent, source);
+  if (!actual || actual.startsWith('..') || path.isAbsolute(actual)) {
+    fail(location, 'showcase path must stay inside its run directory');
+  }
+  return source;
+}
+
+function showcaseKind(showcase) {
+  return showcase?.kind ?? showcase?.type ?? showcase?.mode;
+}
+
+function hasForbiddenLiveMarkup(html) {
+  if (/<base\b[^>]*>/i.test(html)) return '<base> is not allowed';
+  const metas = html.match(/<meta\b[^>]*>/gi) ?? [];
+  if (metas.some(meta => /\bhttp-equiv\s*=\s*["']?content-security-policy\b/i.test(meta))) {
+    return 'an existing Content-Security-Policy is not allowed';
+  }
+  return null;
+}
+
+function bridgeScript(taskId) {
+  const safeTaskId = JSON.stringify(taskId).replace(/</g, '\\u003c');
+  return `(function () {
+  const taskId = ${safeTaskId};
+  const actions = {
+    'color-cascade-18': ['reset', 'runChallenge'],
+    'prism-twist': ['reset', 'scramble', 'play'],
+    'lander-pop': ['reset', 'run']
+  }[taskId] || [];
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto && crypto.getRandomValues) crypto.getRandomValues(bytes);
+  const nonce = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('') || Math.random().toString(36).slice(2);
+  const send = message => window.parent.postMessage({ protocol: 'LIGHTBENCH-1', nonce, taskId, ...message }, '*');
+  window.addEventListener('message', async event => {
+    const data = event.data;
+    if (event.source !== window.parent || !data || data.protocol !== 'LIGHTBENCH-1' || data.nonce !== nonce || data.taskId !== taskId) return;
+    if (data.type !== 'command') return;
+    const requestId = data.requestId;
+    if (!actions.includes(data.action)) {
+      send({ type: 'response', requestId, ok: false, error: 'unsupported action' });
+      return;
+    }
+    try {
+      const api = window.__LIGHTBENCH__;
+      if (!api || typeof api[data.action] !== 'function') throw new Error('showcase API is unavailable');
+      const args = Array.isArray(data.args) ? data.args : [];
+      const value = await api[data.action](...args);
+      send({ type: 'response', requestId, ok: true, value });
+    } catch (error) {
+      send({ type: 'response', requestId, ok: false, error: String(error?.message || error) });
+    }
+  });
+  window.addEventListener('load', () => {
+    const deadline = Date.now() + 7500;
+    const announce = () => {
+      const api = window.__LIGHTBENCH__;
+      if (api && actions.every(action => typeof api[action] === 'function')) {
+        send({ type: 'ready', actions });
+      } else if (Date.now() < deadline) {
+        setTimeout(announce, 50);
+      }
+    };
+    announce();
+  });
+}());`;
+}
+
+function injectLiveHtml(html, taskId = null) {
+  const forbidden = hasForbiddenLiveMarkup(html);
+  if (forbidden) fail('showcase.entry', forbidden);
+  const assetRoot = '__LIGHTBENCH_ASSET_ROOT_9b41c8__';
+  const csp = `<meta data-lightbenchmark-csp http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' ${assetRoot}; style-src 'unsafe-inline' ${assetRoot}; img-src ${assetRoot} data: blob:; media-src ${assetRoot} data: blob:; font-src ${assetRoot} data:; connect-src ${assetRoot}; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri ${assetRoot}; form-action 'none'">`;
+  const base = `<base data-lightbenchmark-base href="${assetRoot}">`;
+  const bridge = taskId ? `<script>${bridgeScript(taskId)}</script>` : '';
+  const prefix = `${csp}${base}${bridge}`;
+  return /^\s*<!doctype\b[^>]*>/i.test(html)
+    ? html.replace(/^(\s*<!doctype\b[^>]*>)/i, `$1${prefix}`)
+    : `${prefix}${html}`;
+}
+
+async function collectLiveFiles(sourceRoot, sourceDir, run, entry) {
+  const artifactPaths = new Set((run.artifacts ?? []).map(artifact => artifact.path));
+  const sourcePrefix = path.relative(sourceDir, sourceRoot).replace(/\\/g, '/');
+  const files = [];
+  let totalBytes = 0;
+  async function visit(directory, relative = '') {
+    const entries = (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    for (const item of entries) {
+      const itemRelative = relative ? `${relative}/${item.name}` : item.name;
+      const file = path.join(directory, item.name);
+      const stat = await lstat(file);
+      if (stat.isSymbolicLink()) fail(file, 'showcase symlinks are not allowed');
+      if (stat.isDirectory()) {
+        await visit(file, itemRelative);
+        continue;
+      }
+      if (!stat.isFile()) fail(file, 'showcase assets must be regular files');
+      // run.json and declared artifact files belong to the run, not its live bundle.
+      const runRelative = sourcePrefix ? `${sourcePrefix}/${itemRelative}` : itemRelative;
+      if ((!sourcePrefix && itemRelative === 'run.json') || artifactPaths.has(runRelative)) continue;
+      const extension = path.extname(itemRelative).toLowerCase();
+      if (!showcaseExtensions.has(extension)) fail(file, 'live showcase files must be UTF-8 .html, .css, .js, .mjs, or .json');
+      const bytes = await readFile(file);
+      decodeUtf8(bytes, file);
+      totalBytes += bytes.byteLength;
+      if (totalBytes > liveShowcaseLimit) fail(sourceDir, 'live showcase bundle exceeds 2 MiB');
+      files.push({ relative: itemRelative, bytes });
+    }
+  }
+  await visit(sourceRoot);
+  const entryFile = files.find(file => file.relative === entry);
+  if (!entryFile) fail(`${run.runId}.showcase.entry`, 'live entry file does not exist');
+  for (const file of files.filter(item => path.extname(item.relative).toLowerCase() === '.html')) {
+    const originalBytes = file.bytes.byteLength;
+    const html = decodeUtf8(file.bytes, `${run.runId}.showcase.${file.relative}`);
+    file.bytes = Buffer.from(injectLiveHtml(html, file === entryFile ? run.taskId : null), 'utf8');
+    totalBytes += file.bytes.byteLength - originalBytes;
+  }
+  if (totalBytes > liveShowcaseLimit) fail(sourceDir, 'published live showcase bundle exceeds 2 MiB');
+  return files;
+}
+
+async function prepareShowcases(entries) {
+  const prepared = [];
+  for (const { run, sourceDir } of entries) {
+    const showcase = run.showcase;
+    if (!showcase) continue;
+    const kind = showcaseKind(showcase);
+    if (kind === 'chat') {
+      const seen = new Set();
+      const preparedTurns = await Promise.all(showcase.turns.map(async (turn, index) => {
+        const location = `${run.runId}.showcase.turns[${index}]`;
+        if (seen.has(turn.path)) fail(`${location}.path`, `duplicate chat transcript path: ${turn.path}`);
+        seen.add(turn.path);
+        const source = insideDirectory(sourceDir, turn.path, location);
+        const stat = await lstat(source).catch(() => null);
+        if (!stat || !stat.isFile() || stat.isSymbolicLink()) fail(location, 'chat transcript file does not exist or is a symlink');
+        const bytes = await readFile(source);
+        if (bytes.byteLength > chatShowcaseLimit) fail(location, 'chat transcript exceeds 64 KiB');
+        const text = decodeUtf8(bytes, source);
+        return { turn: { ...turn, text }, file: { relative: turn.path, bytes } };
+      }));
+      run.showcase.turns = preparedTurns.map(item => item.turn);
+      prepared.push({ run, files: preparedTurns.map(item => item.file) });
+      continue;
+    }
+    const bundleKey = ['bundle', 'root', 'directory', 'path'].find(key => own(showcase, key));
+    const bundlePath = bundleKey ? showcase[bundleKey] : '';
+    const sourceRoot = bundlePath ? insideDirectory(sourceDir, bundlePath, `${run.runId}.showcase.${bundleKey}`) : sourceDir;
+    const rootStat = await lstat(sourceRoot).catch(() => null);
+    if (!rootStat || !rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+      fail(`${run.runId}.showcase.${bundleKey ?? 'entry'}`, 'live showcase bundle directory does not exist or is a symlink');
+    }
+    const files = await collectLiveFiles(sourceRoot, sourceDir, run, showcase.entry);
+    const prefix = bundlePath ? `${bundlePath}/` : '';
+    prepared.push({
+      run,
+      files: files.map(file => ({ relative: `${prefix}${file.relative}`, bytes: file.bytes })),
+      entry: `${prefix}${showcase.entry}`,
+    });
+  }
+  return prepared;
+}
+
+async function copyShowcases(prepared, distDir) {
+  for (const item of prepared) {
+    const root = path.join(distDir, 'showcases', encodeURIComponent(item.run.runId));
+    for (const file of item.files) {
+      const destination = path.join(root, ...file.relative.split('/'));
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, file.bytes);
+    }
+    if (item.entry) {
+      const relative = item.entry;
+      item.run.showcase.url = `./showcases/${encodeURIComponent(item.run.runId)}/${relative.split('/').map(encodeURIComponent).join('/')}`;
+    } else {
+      item.run.showcase.urls = item.files.map(file => `./showcases/${encodeURIComponent(item.run.runId)}/${file.relative.split('/').map(encodeURIComponent).join('/')}`);
+    }
+  }
+}
+
 function isSameOrInside(parent, child) {
   const relative = path.relative(parent, child);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
@@ -511,6 +759,7 @@ export async function buildSite(options = {}) {
   const runEntries = await readRunEntries(runsDir);
   const runs = runEntries.map(({ run }) => run);
   await validateArtifactFiles(runEntries);
+  const preparedShowcases = await prepareShowcases(runEntries);
   await lstat(webDir).then(stat => {
     if (!stat.isDirectory() || stat.isSymbolicLink()) fail(webDir, 'web directory does not exist');
   }).catch(error => {
@@ -524,6 +773,7 @@ export async function buildSite(options = {}) {
   await copyDirectory(webDir, distDir);
   await copyPrompts(promptsDir, path.join(distDir, 'prompts'));
   await copyRunArtifacts(runEntries, distDir);
+  await copyShowcases(preparedShowcases, distDir);
   const dataDir = path.join(distDir, 'data');
   const outputFile = path.join(dataDir, 'runs.json');
   await mkdir(dataDir, { recursive: true });

@@ -120,6 +120,18 @@ select:focus-visible, button:focus-visible { outline: 3px solid var(--lime); out
 .demo-badge { background: rgba(255,228,131,.14); color: var(--yellow); }
 .debug-badge { background: rgba(255,114,200,.14); color: var(--pink); }
 .task-line { margin: 1.2rem 0; color: var(--pink); font-size: .9rem; font-weight: 800; }
+.demo-message { margin: 0 0 .7rem; color: var(--yellow); font-size: .78rem; font-weight: 800; }
+.showcase { position: relative; z-index: 1; margin: 0 0 1rem; padding: .8rem; border: 1px solid rgba(92,236,255,.22); border-radius: .8rem; background: rgba(0,0,0,.16); }
+.showcase h3, .evaluation-summary h3 { margin: 0 0 .35rem; color: var(--cyan); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.showcase-empty { margin: 0 0 1rem; padding: .75rem; border: 1px dashed var(--line); border-radius: .8rem; color: var(--muted); font-size: .78rem; }
+.evaluation-summary { margin: 0 0 1rem; padding: .75rem; border: 1px solid rgba(255,228,131,.2); border-radius: .8rem; background: rgba(255,228,131,.06); }
+.evaluation-summary p { margin: 0; color: var(--yellow); font-size: .82rem; }
+.showcase-button { padding: .55rem .75rem; border: 0; border-radius: .65rem; background: var(--cyan); color: #08151b; cursor: pointer; font: inherit; font-size: .8rem; font-weight: 900; }
+.showcase-button:hover { background: var(--lime); }
+.showcase-status { margin-left: .5rem; color: var(--muted); font-size: .75rem; }
+.showcase-frame { display: block; width: 100%; min-height: 22rem; margin-top: .7rem; border: 1px solid var(--line); border-radius: .65rem; background: #0d0f1d; }
+.chat-transcript { max-height: 12rem; margin: 0; padding: .7rem; overflow: auto; border-radius: .6rem; background: rgba(0,0,0,.2); color: var(--ink); font: .78rem/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.showcase-compact .chat-transcript { max-height: 7rem; }
 .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .7rem; margin: 0 0 1.1rem; }
 .artifact { min-width: 0; margin: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: .7rem; background: rgba(0,0,0,.2); }
 .artifact img, .artifact video { display: block; width: 100%; max-height: 15rem; aspect-ratio: 16 / 9; object-fit: cover; }

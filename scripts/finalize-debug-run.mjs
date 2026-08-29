@@ -1,0 +1,365 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { cp, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { evaluateTurn1, evaluateTurn2 } from '../evaluator/chat.mjs';
+import { validateRun } from './build-site.mjs';
+import { evaluateSubmission } from './evaluate-submission.mjs';
+import { consumeCodexLine, emptyCodexStats } from './run-codex-task.mjs';
+
+const scriptFile = fileURLToPath(import.meta.url);
+const projectRoot = path.resolve(path.dirname(scriptFile), '..');
+const codingTasks = new Set(['color-cascade-18', 'prism-twist', 'lander-pop']);
+const allowedShowcaseExtensions = new Set(['.html', '.css', '.js', '.mjs', '.json']);
+const showcaseLimit = 2 * 1024 * 1024;
+const sensitiveRepositoryPatterns = [
+  ['independent evaluator source', /(?:^|[\\/])evaluator[\\/]+[^"'\s]+\.mjs/iu],
+  ['evaluation harness', /(?:^|[\\/])scripts[\\/]+evaluate-submission\.mjs/iu],
+  ['benchmark test suite', /(?:^|[\\/])tests[\\/]+[^"'\s]+\.test\.mjs/iu],
+];
+
+const sha256 = value => createHash('sha256').update(value).digest('hex');
+const fileHash = async file => sha256(await readFile(file));
+
+function identifier(value, name) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9._-]+$/u.test(value) || value === '.' || value === '..') {
+    throw new Error(`${name} must contain only letters, numbers, dot, underscore, and hyphen`);
+  }
+  return value;
+}
+
+async function regularFile(file) {
+  const stat = await lstat(file).catch(() => null);
+  return stat?.isFile() && !stat.isSymbolicLink() ? stat : null;
+}
+
+async function inspectShowcase(directory) {
+  const files = [];
+  let totalBytes = 0;
+  const visit = async (current, prefix = '') => {
+    for (const entry of (await readdir(current, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+      const absolute = path.join(current, entry.name);
+      const relative = path.posix.join(prefix, entry.name);
+      const stat = await lstat(absolute);
+      if (entry.isSymbolicLink() || stat.isSymbolicLink()) throw new Error(`symlinkは公開できません: ${relative}`);
+      if (entry.isDirectory()) await visit(absolute, relative);
+      else if (!entry.isFile()) throw new Error(`通常ファイルではありません: ${relative}`);
+      else {
+        const extension = path.extname(entry.name).toLowerCase();
+        if (!allowedShowcaseExtensions.has(extension)) throw new Error(`許可外ファイルです: ${relative}`);
+        const bytes = await readFile(absolute);
+        new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        totalBytes += stat.size;
+        if (totalBytes > showcaseLimit) throw new Error('showcaseが2 MiBを超えています');
+        files.push({ absolute, relative, size: stat.size, sha256: sha256(bytes) });
+      }
+    }
+  };
+  try {
+    const info = await lstat(directory).catch(() => null);
+    if (!info?.isDirectory() || info.isSymbolicLink()) throw new Error('submission/siteがありません');
+    await visit(directory);
+    const index = files.find(file => file.relative === 'index.html');
+    if (!index) throw new Error('UI未完成: submission/site/index.htmlがありません');
+    const html = await readFile(index.absolute, 'utf8');
+    if (/<base\b/iu.test(html)) throw new Error('index.htmlのbase要素は公開できません');
+    if (/<meta\b[^>]*http-equiv\s*=\s*["']?content-security-policy/iu.test(html)) {
+      throw new Error('index.htmlの独自CSPは公開できません');
+    }
+    return {
+      valid: true,
+      files,
+      totalBytes,
+      hash: sha256(files.map(file => `${file.relative}\0${file.size}\0${file.sha256}`).join('\n')),
+      reason: null,
+    };
+  } catch (error) {
+    return { valid: false, files: [], totalBytes, hash: null, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function unavailableBucket() {
+  return { inputTokens: null, outputTokens: null, cachedTokens: null, reasoningTokens: null, totalTokens: null, cost: null, currency: null, costStatus: 'unavailable' };
+}
+
+function zeroBucket() {
+  return { inputTokens: 0, outputTokens: 0, cachedTokens: 0, reasoningTokens: 0, totalTokens: 0, cost: 0, currency: null, costStatus: 'none' };
+}
+
+function normalizedUsage(usage) {
+  if (!usage || typeof usage !== 'object') return unavailableBucket();
+  const inputTokens = usage.inputTokens ?? usage.input_tokens ?? null;
+  const outputTokens = usage.outputTokens ?? usage.output_tokens ?? null;
+  const cachedTokens = usage.cachedTokens ?? usage.cached_input_tokens ?? usage.input_tokens_details?.cached_tokens ?? null;
+  const reasoningTokens = usage.reasoningTokens ?? usage.reasoning_output_tokens ?? usage.output_tokens_details?.reasoning_tokens ?? null;
+  const totalTokens = usage.totalTokens ?? usage.total_tokens
+    ?? (inputTokens !== null && outputTokens !== null ? inputTokens + outputTokens : null);
+  return { inputTokens, outputTokens, cachedTokens, reasoningTokens, totalTokens, cost: null, currency: null, costStatus: 'unavailable' };
+}
+
+function usageRecord(usage, spawned) {
+  const total = normalizedUsage(usage);
+  if (spawned === 0) return { root: { ...total }, subagents: zeroBucket(), total };
+  return { root: unavailableBucket(), subagents: unavailableBucket(), total };
+}
+
+function observedLimits(metadata, usage) {
+  const steps = metadata.itemCount ?? null;
+  const outputTokens = usage.total.outputTokens;
+  return {
+    wallClock: { limitMs: 720_000, enforcement: 'hard', observedMs: metadata.durationMs ?? null, withinLimit: metadata.durationMs === null ? null : metadata.durationMs <= 720_000 },
+    agentSteps: { limit: 24, enforcement: 'observed-only', observed: steps, withinLimit: steps === null ? null : steps <= 24 },
+    outputTokens: { limit: 20_000, enforcement: 'observed-only', observed: outputTokens, withinLimit: outputTokens === null ? null : outputTokens <= 20_000 },
+  };
+}
+
+async function buildEvaluation(taskId, workspace, runner, showcaseState) {
+  const common = {
+    status: 'debug-only',
+    showcase: showcaseState,
+    comparabilityBlockers: ['同一ホストのdebug実行で、正式比較用の隔離laneではありません。'],
+    measurementFailures: [],
+  };
+  if (runner.error) common.measurementFailures.push(runner.error);
+  if (runner.malformedLines) common.measurementFailures.push(`Codex JSONL malformed lines: ${runner.malformedLines}`);
+  if (runner.commandPolicyBlocks) common.measurementFailures.push(`Codex command policy blocks: ${runner.commandPolicyBlocks}`);
+  if (runner.sensitiveRepositoryReads?.length) {
+    common.comparabilityBlockers.push(`候補がbenchmark非公開ファイルを参照しました: ${runner.sensitiveRepositoryReads.join(', ')}`);
+  }
+
+  if (taskId === 'japanese-chat') {
+    const firstFile = path.join(workspace, 'turn1-response.txt');
+    const secondFile = path.join(workspace, 'turn2-response.txt');
+    const [first, second] = await Promise.all([
+      regularFile(firstFile).then(stat => stat ? readFile(firstFile, 'utf8') : null),
+      regularFile(secondFile).then(stat => stat ? readFile(secondFile, 'utf8') : null),
+    ]);
+    return {
+      ...common,
+      deterministicChecks: first && second ? { turn1: evaluateTurn1(first), turn2: evaluateTurn2(second) } : null,
+      headline: { pass: Boolean(first && second), reason: first && second ? '2ターンを取得しました' : '2ターンの回答が揃っていません' },
+    };
+  }
+
+  try {
+    const independentEvaluator = await evaluateSubmission(taskId, path.join(workspace, 'submission', 'site'));
+    return {
+      ...common,
+      independentEvaluator,
+      headline: { pass: independentEvaluator.headlinePass },
+      logic: { pass: independentEvaluator.logicPass },
+      robustness: { pass: independentEvaluator.robustnessPass },
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      ...common,
+      independentEvaluator: null,
+      headline: { pass: false, reason },
+      logic: { pass: false, reason: '評価を完走できませんでした' },
+      robustness: { pass: false, reason: '評価を完走できませんでした' },
+      measurementFailures: [...common.measurementFailures, `independent evaluator: ${reason}`],
+    };
+  }
+}
+
+async function recoverRunner(workspace, taskId, recorded) {
+  let eventInfo = null;
+  let recovered = { ...recorded };
+  if (taskId !== 'japanese-chat') {
+    const eventFile = path.join(workspace, 'codex-events.jsonl');
+    const stats = emptyCodexStats();
+    let sensitiveRepositoryReads = [];
+    eventInfo = await regularFile(eventFile);
+    if (eventInfo) {
+      const events = await readFile(eventFile, 'utf8');
+      for (const line of events.split(/\r?\n/u)) consumeCodexLine(stats, line);
+      sensitiveRepositoryReads = sensitiveRepositoryPatterns
+        .filter(([, pattern]) => pattern.test(events))
+        .map(([label]) => label);
+    }
+    recovered = {
+      ...recorded,
+      threadId: recorded.threadId ?? stats.threadId,
+      itemCount: Math.max(recorded.itemCount ?? 0, stats.itemCount),
+      toolCalls: Math.max(recorded.toolCalls ?? 0, stats.toolCalls),
+      subagents: Math.max(recorded.subagents ?? 0, stats.subagents),
+      usage: recorded.usage ?? stats.usage,
+      malformedLines: Math.max(recorded.malformedLines ?? 0, stats.malformedLines),
+      sensitiveRepositoryReads,
+    };
+    const stderr = await readFile(path.join(workspace, 'codex-stderr.log'), 'utf8').catch(() => '');
+    recovered.commandPolicyBlocks = (stderr.match(/rejected: blocked by policy/gu) ?? []).length;
+  } else {
+    const responseStats = await Promise.all(['turn1-response.txt', 'turn2-response.txt'].map(file => regularFile(path.join(workspace, file))));
+    eventInfo = responseStats.filter(Boolean).sort((a, b) => b.mtimeMs - a.mtimeMs)[0] ?? null;
+  }
+  if (recorded.terminationReason === 'running' || !recorded.endedAt) {
+    const started = Date.parse(recorded.startedAt);
+    const observedEnd = eventInfo?.mtimeMs ?? Date.now();
+    const ended = new Date(Number.isFinite(started) ? Math.max(started, observedEnd) : observedEnd);
+    recovered.endedAt = ended.toISOString();
+    recovered.durationMs = Number.isFinite(started) ? ended.getTime() - started : null;
+    recovered.terminationReason = 'finalized-incomplete';
+    recovered.error = recorded.error ?? 'runner ended before final metadata was written';
+  }
+  return recovered;
+}
+
+export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = path.join(projectRoot, 'runs'), workRoot = path.join(projectRoot, 'work'), timeZone = 'Asia/Tokyo' }) {
+  const root = path.resolve(workspace);
+  const taskId = path.basename(root);
+  if (taskId !== 'japanese-chat' && !codingTasks.has(taskId)) throw new Error(`unknown task directory: ${taskId}`);
+  identifier(runId, 'runId');
+  identifier(cohortId, 'cohortId');
+  const workspaceInfo = await lstat(root).catch(() => null);
+  if (!workspaceInfo?.isDirectory()) throw new Error(`workspace does not exist: ${root}`);
+  const relativeWork = path.relative(path.resolve(workRoot), root);
+  const workSegments = relativeWork.split(path.sep);
+  if (relativeWork.startsWith('..') || path.isAbsolute(relativeWork) || workSegments.length !== 2 || workSegments.some(segment => !segment)) {
+    throw new Error('workspace must be work/<fresh-cohort>/<task-id>');
+  }
+  const outputRoot = path.resolve(runsDir);
+  const target = path.join(outputRoot, runId);
+  if (await lstat(target).catch(() => null)) throw new Error(`run already exists: ${target}`);
+
+  const runnerFile = path.join(root, taskId === 'japanese-chat' ? 'chat-api-run.json' : 'codex-run.json');
+  let runner = JSON.parse(await readFile(runnerFile, 'utf8'));
+  const payload = JSON.parse(await readFile(path.join(root, 'payload.json'), 'utf8'));
+  const promptHash = sha256(JSON.stringify(payload.sequence));
+  const commitment = JSON.parse(await readFile(path.join(root, '..', 'commitment.json'), 'utf8'));
+  if (commitment.prompts?.[taskId] !== promptHash) throw new Error('payload does not match the fresh workspace commitment');
+  runner = await recoverRunner(root, taskId, runner);
+  const spawned = taskId === 'japanese-chat' ? 0 : runner.subagents ?? 0;
+  const usage = usageRecord(runner.usage, spawned);
+  const limits = observedLimits(runner, usage);
+  const staging = path.join(outputRoot, `_staging-${runId}-${randomUUID()}`);
+  await mkdir(staging, { recursive: false });
+  let showcase = null;
+  let showcaseState = { available: false, reason: null };
+  let candidateSiteHash = null;
+  try {
+    if (taskId === 'japanese-chat') {
+      const turnFiles = ['turn1-response.txt', 'turn2-response.txt'];
+      const stats = await Promise.all(turnFiles.map(file => regularFile(path.join(root, file))));
+      if (stats.every(stat => stat && stat.size <= 65_536)) {
+        await mkdir(path.join(staging, 'showcase'));
+        await Promise.all(turnFiles.map((file, index) => cp(path.join(root, file), path.join(staging, 'showcase', `turn-${index + 1}.txt`))));
+        showcase = {
+          kind: 'chat',
+          turns: [
+            { label: '閉本回答', path: 'showcase/turn-1.txt' },
+            { label: '訂正回答', path: 'showcase/turn-2.txt' },
+          ],
+        };
+        showcaseState = { available: true, reason: null };
+      } else {
+        showcaseState.reason = '回答未取得または64 KiB超過のため表示できません';
+      }
+    } else {
+      const candidate = await inspectShowcase(path.join(root, 'submission', 'site'));
+      candidateSiteHash = candidate.hash;
+      if (candidate.valid) {
+        await cp(path.join(root, 'submission', 'site'), path.join(staging, 'showcase'), { recursive: true, errorOnExist: true, force: false });
+        showcase = { kind: 'live', entry: 'showcase/index.html', protocol: 'LIGHTBENCH-1', scenario: 'public-v1' };
+        showcaseState = { available: true, reason: null };
+      } else {
+        showcaseState.reason = candidate.reason;
+      }
+    }
+
+    const evaluation = await buildEvaluation(taskId, root, runner, showcaseState);
+    for (const [name, item] of Object.entries(limits)) {
+      if (item.withinLimit === false) evaluation.comparabilityBlockers.push(`${name} budget exceeded`);
+    }
+    const modelId = runner.modelReturned ?? runner.modelRequested ?? 'unknown';
+    const completed = runner.terminationReason === 'completed';
+    const starterFile = path.join(root, 'public-tests.mjs');
+    const hashes = {
+      prompt: promptHash,
+      starter: await regularFile(starterFile) ? await fileHash(starterFile) : null,
+      candidateSite: candidateSiteHash,
+      evaluator: await fileHash(taskId === 'japanese-chat'
+        ? path.join(projectRoot, 'evaluator', 'chat.mjs')
+        : path.join(projectRoot, 'scripts', 'evaluate-submission.mjs')),
+      turn1Output: await regularFile(path.join(root, 'turn1-response.txt')) ? await fileHash(path.join(root, 'turn1-response.txt')) : null,
+      turn2Output: await regularFile(path.join(root, 'turn2-response.txt')) ? await fileHash(path.join(root, 'turn2-response.txt')) : null,
+    };
+    const run = {
+      schemaVersion: 1,
+      runId,
+      cohortId,
+      taskId,
+      runKind: 'debug',
+      status: 'inconclusive',
+      model: {
+        displayName: modelId === 'gpt-5.6-luna' ? 'GPT-5.6 Luna' : modelId,
+        provider: 'OpenAI',
+        modelId,
+        revision: runner.modelReturned ?? null,
+        reasoning: { requested: runner.reasoningEffortRequested ?? runner.reasoningEffort ?? null, effective: taskId === 'japanese-chat' && completed ? runner.reasoningEffort ?? null : null },
+      },
+      execution: {
+        startedAt: runner.startedAt ?? null,
+        endedAt: runner.endedAt ?? null,
+        timeZone,
+        durationMs: runner.durationMs ?? null,
+        agentSteps: taskId === 'japanese-chat' ? (showcase ? 2 : 0) : runner.itemCount ?? null,
+        toolCalls: taskId === 'japanese-chat' ? 0 : runner.toolCalls ?? null,
+        commandPolicyBlocks: taskId === 'japanese-chat' ? 0 : runner.commandPolicyBlocks ?? 0,
+        benchmarkRepositoryExposure: taskId === 'japanese-chat' ? [] : runner.sensitiveRepositoryReads ?? [],
+        terminationReason: runner.terminationReason ?? 'unknown',
+        lane: 'autonomous',
+        harness: runner.cliVersion ? `${runner.harness} ${runner.cliVersion}` : runner.harness,
+        isolation: runner.isolation,
+        limits,
+      },
+      usage,
+      agents: spawned === 0
+        ? { spawned: 0, completed: 0, failed: 0, maxConcurrent: 0, items: [] }
+        : { spawned, completed: null, failed: null, maxConcurrent: null, items: null },
+      interventions: [],
+      artifacts: [],
+      showcase,
+      versions: {
+        benchmark: '1.0.0',
+        prompt: payload.promptVersion,
+        commonPrompt: payload.commonVersion ?? null,
+        runner: runner.cliVersion ?? runner.harness,
+        evaluator: 'in-repository-v1',
+      },
+      hashes,
+      evaluation,
+    };
+    validateRun(run, `${runId}/run.json`);
+    await writeFile(path.join(staging, 'run.json'), `${JSON.stringify(run, null, 2)}\n`, 'utf8');
+    await rename(staging, target);
+    return { target, run };
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function parseArgs(args) {
+  const workspace = args.shift();
+  if (!workspace) throw new Error('Usage: node scripts/finalize-debug-run.mjs <workspace> --run-id ID --cohort-id ID [--runs-dir PATH]');
+  const options = { workspace };
+  while (args.length) {
+    const key = args.shift();
+    const value = args.shift();
+    if (!value) throw new Error(`${key} requires a value`);
+    if (key === '--run-id') options.runId = value;
+    else if (key === '--cohort-id') options.cohortId = value;
+    else if (key === '--runs-dir') options.runsDir = value;
+    else throw new Error(`unknown option: ${key}`);
+  }
+  if (!options.runId || !options.cohortId) throw new Error('--run-id and --cohort-id are required');
+  return options;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === scriptFile) {
+  finalizeDebugRun(parseArgs(process.argv.slice(2)))
+    .then(({ target }) => console.log(JSON.stringify({ target }, null, 2)))
+    .catch(error => { console.error(error.message); process.exitCode = 1; });
+}
