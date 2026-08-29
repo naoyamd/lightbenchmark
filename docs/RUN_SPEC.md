@@ -26,6 +26,6 @@ statusは`pass`、`partial`、`candidate-fail`、`infra-error`、`inconclusive`�
 
 公開galleryの動画・画像はrun directoryからの相対pathだけを使用する。絶対URL、`..`、symlink、実体のないfile、種別と拡張子の不一致は公開buildで拒否する。
 
-live showcaseだけは候補HTML/CSS/JavaScriptを公開できる。UTF-8の`.html`、`.css`、`.js`、`.mjs`、`.json`に限定し、合計2 MiB以下、symlink・path traversal・`base`要素・候補独自CSPを拒否する。build時に信頼済みCSPとbridgeを注入し、公開ページは`sandbox="allow-scripts"`だけを持つopaque-origin iframeでクリック後に1件ずつ実行する。showcase内の表示やmessageは観察用であり、scoreは独立評価器の記録だけを正とする。
+live showcaseだけは候補HTML/CSS/JavaScriptを公開できる。UTF-8の`.html`、`.css`、`.js`、`.mjs`、`.json`に限定し、合計2 MiB以下、symlink・path traversal・`base`要素・候補独自CSPを拒否する。build時に信頼済みCSPとbridgeを注入し、公開ページは`sandbox="allow-scripts"`だけを持つopaque-origin iframeへ初期状態まで自動mountする。課題ボタンは準備済み状態から公開操作だけを実行し、同時実行は1件に限定する。別課題へ切り替えると前のshowcaseを新しいiframeの初期状態へ戻す。showcase内の表示やmessageは観察用であり、scoreは独立評価器の記録だけを正とする。
 
 `execution.limits`には各budgetが`hard`か`observed-only`かを記録する。強制できない24 agent stepや20,000 output tokenをhard制限として表示してはならず、超過runは正式結果にしない。

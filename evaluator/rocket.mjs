@@ -8,6 +8,8 @@ export const DEFAULT_PARAMS = Object.freeze({
   K: 8,
   C: 0.8,
   windAmp: 0.2,
+  gustAmp: 0.08,
+  dragCoeff: 0.0025,
   padX: 0,
   padHalf: 6,
   fuel0: 0.65,
@@ -18,6 +20,8 @@ const PARAM_RANGES = {
   g: [9.4, 10.2],
   aMax: [20.5, 23.5],
   windAmp: [0, 0.4],
+  gustAmp: [0, 0.2],
+  dragCoeff: [0, 0.01],
   padX: [-10, 10],
   padHalf: [5.5, 6.5],
   fuel0: [0.55, 0.75],
@@ -27,6 +31,8 @@ const STATE_KEYS = ["t", "x", "y", "vx", "vy", "theta", "omega", "fuel"];
 const TAU = Math.PI * 2;
 const SAFE_THETA = 8 * Math.PI / 180;
 const SAFE_OMEGA = 15 * Math.PI / 180;
+const THROTTLE_TAU = 0.18;
+const GIMBAL_TAU = 0.12;
 
 function validateSeed(seed) {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
@@ -81,6 +87,11 @@ function validateState(state) {
       throw new TypeError(`state.${key} must be finite`);
     }
   }
+  for (const key of ["throttleActual", "gimbalActual"]) {
+    if (key in state && (typeof state[key] !== "number" || !Number.isFinite(state[key]))) {
+      throw new TypeError(`state.${key} must be finite`);
+    }
+  }
 }
 
 function clamp(value, low, high) {
@@ -125,20 +136,28 @@ export function createScenario(seed, overrides = {}) {
     theta: generated.theta,
     omega: generated.omega,
     fuel: params.fuel0,
+    throttleActual: 0,
+    gimbalActual: 0,
   };
   return { state, params };
 }
 
 export function stepPhysics(state, control, params = DEFAULT_PARAMS) {
   validateState(state);
-  const { g, aMax, K, C, windAmp, phase } = normalizeParams(params);
+  const { g, aMax, K, C, windAmp, gustAmp, dragCoeff, fuel0, phase } = normalizeParams(params);
   const { throttle, gimbal } = controlValues(control);
-  const u = state.fuel > 0 ? throttle : 0;
-  const delta = gimbal;
-  const aT = aMax * u;
-  const wind = windAmp * Math.sin(0.31 * state.t + phase);
-  const ax = aT * Math.sin(state.theta + delta) + wind;
-  const ay = aT * Math.cos(state.theta + delta) - g;
+  const throttleActual = (state.throttleActual ?? 0)
+    + (throttle - (state.throttleActual ?? 0)) * (1 - Math.exp(-DT / THROTTLE_TAU));
+  const gimbalActual = (state.gimbalActual ?? 0)
+    + (gimbal - (state.gimbalActual ?? 0)) * (1 - Math.exp(-DT / GIMBAL_TAU));
+  const u = state.fuel > 0 ? throttleActual : 0;
+  const delta = gimbalActual;
+  const fuelRatio = clamp(state.fuel / fuel0, 0, 1);
+  const aT = aMax * u * (1.12 - 0.12 * fuelRatio);
+  const wind = windAmp * Math.sin(0.07 * state.t + phase)
+    + gustAmp * Math.sin(2.3 * state.t + 0.5 * phase);
+  const ax = aT * Math.sin(state.theta + delta) + wind - dragCoeff * state.vx * Math.abs(state.vx);
+  const ay = aT * Math.cos(state.theta + delta) - g - dragCoeff * state.vy * Math.abs(state.vy);
   const omega = state.omega + DT * (K * u * delta - C * state.omega);
   const theta = state.theta + DT * omega;
   const vx = state.vx + DT * ax;
@@ -155,6 +174,8 @@ export function stepPhysics(state, control, params = DEFAULT_PARAMS) {
     theta,
     omega,
     fuel,
+    throttleActual,
+    gimbalActual,
   };
 }
 

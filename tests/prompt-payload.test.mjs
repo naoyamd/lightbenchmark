@@ -9,22 +9,22 @@ import { benchmarkTaskIds, buildPromptPayload } from "../scripts/prompt-payload.
 const promptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../prompts");
 const publicV1 = {
   "color-cascade-18": {
-    version: "PUYO-1.3",
-    file: "color-cascade-18-v1.3.md",
-    sha256: "b2d15fec460842455ad7701f0f71bd76ad04601a7839eb31073df55cea5008a1",
-    previousSha256: "f58978d575ee6138415240762b9626e5e21f52b9ae0b94ae4f66a4d8a2f256cd",
+    version: "PUYO-1.4",
+    file: "color-cascade-18-v1.4.md",
+    sha256: "a26b56a56c25b0c294d1cd3cea67145d6730469224c873470c041aa18c224af7",
+    previousSha256: "b2d15fec460842455ad7701f0f71bd76ad04601a7839eb31073df55cea5008a1",
   },
   "prism-twist": {
-    version: "CUBE-1.2",
-    file: "prism-twist-v1.2.md",
-    sha256: "ee91a37c6bd6ea988cfaa8fb355b10b9a428b4746e2b0b63536a3013ce95fa47",
-    previousSha256: "5d921ddfeba34dd68da0bc022e4a5092c6e55c79d82ec5557bb80322250b1e31",
+    version: "CUBE-1.3",
+    file: "prism-twist-v1.3.md",
+    sha256: "0dc0b4f2482d8b215e88ecde02922a068bd64079e14a7cc22a4e26a86f28d854",
+    previousSha256: "ee91a37c6bd6ea988cfaa8fb355b10b9a428b4746e2b0b63536a3013ce95fa47",
   },
   "lander-pop": {
-    version: "LANDER-1.1",
-    file: "lander-pop-v1.1.md",
-    sha256: "2d109525e2cff601e97358927fcb16a55942f3895244f4916e22c65bfab17bd0",
-    previousSha256: "63b1fffad49bccfb904d3cedb08005dd643e8a9b32fdf8a337f3ac3f5aa62d0d",
+    version: "LANDER-2.0",
+    file: "lander-pop-v2.md",
+    sha256: "511d058755433024d4ca162c9ce21aa41a2d586a180c59b8228cbcd55d54b3aa",
+    previousSha256: "2d109525e2cff601e97358927fcb16a55942f3895244f4916e22c65bfab17bd0",
   },
 };
 
@@ -51,8 +51,8 @@ test("coding public-v1 payloads use the frozen filenames and changed hashes", as
   const index = JSON.parse(await readFile(path.join(promptsDir, "index.json"), "utf8"));
   const commonEntry = index.prompts.find((prompt) => prompt.taskId === "common-coding");
   assert.deepEqual(commonEntry && { version: commonEntry.version, file: commonEntry.file }, {
-    version: "CODE-1.2",
-    file: "common-coding-v1.2.md",
+    version: "CODE-1.3",
+    file: "common-coding-v1.3.md",
   });
   for (const [taskId, expected] of Object.entries(publicV1)) {
     const entry = index.prompts.find((prompt) => prompt.taskId === taskId);
@@ -62,7 +62,7 @@ test("coding public-v1 payloads use the frozen filenames and changed hashes", as
     });
     const payload = await buildPromptPayload(taskId, promptsDir);
     assert.equal(payload.promptVersion, expected.version);
-    assert.equal(payload.commonVersion, "CODE-1.2");
+    assert.equal(payload.commonVersion, "CODE-1.3");
     assert.equal(sequenceHash(payload), expected.sha256);
     assert.notEqual(sequenceHash(payload), expected.previousSha256);
   }

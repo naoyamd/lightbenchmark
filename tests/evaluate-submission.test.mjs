@@ -27,7 +27,31 @@ test("rocket evaluator separates physics correctness from controller outcome", a
   const result = await evaluateRocketModules(rocket, controller);
   assert.equal(result.logicPass, true);
   assert.equal(result.headlinePass, false);
+  assert.equal(result.robustnessPass, true);
+  assert.equal(result.landings.length, 8);
+  assert.ok(result.landings.every(({ status, landingTime, fuel, safetyMargin }) => (
+    typeof status === "string"
+    && typeof landingTime === "number"
+    && typeof fuel === "number"
+    && safetyMargin && typeof safetyMargin.pad === "number"
+  )));
   assert.notEqual(result.landings[0].status, "landed");
+});
+
+test("rocket controller rejects direct simulator imports", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "lightbenchmark-controller-"));
+  try {
+    await writeFile(path.join(root, "controller.mjs"), `
+      import * as sim from "./sim.mjs";
+      export function createController() { return { step: () => ({ throttle: sim ? 0 : 1, gimbal: 0 }) }; }
+    `, "utf8");
+    const result = await evaluateSubmission("lander-pop", root);
+    assert.equal(result.pass, false);
+    assert.equal(result.logicPass, false);
+    assert.match(result.checks[0].detail, /must not import sim\.mjs/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("all reference candidates qualify through permission-limited processes", async () => {

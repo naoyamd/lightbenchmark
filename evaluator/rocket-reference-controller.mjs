@@ -1,6 +1,6 @@
 const MAX_GIMBAL = 0.35;
 const NOMINAL_G = 9.81;
-const NOMINAL_A_MAX = 22;
+const NOMINAL_A_MAX = 20;
 
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
@@ -23,12 +23,11 @@ export function createController() {
       previous = { ...sensor };
 
       const altitude = Math.max(0, sensor.altitude);
-      const targetVy = -(2.2 + Math.min(10, 0.8 * Math.sqrt(altitude)));
+      const targetVy = -(3.2 + Math.min(10, 0.8 * Math.sqrt(altitude)));
       const tilt = sensor.theta;
       const desiredAy = 1.3 * (targetVy - vy);
       let throttle = (NOMINAL_G + desiredAy) / (NOMINAL_A_MAX * Math.max(0.82, Math.cos(tilt)));
       if (altitude < 14) throttle += 0.08;
-      if (altitude < 5 && vy > -1.5) throttle -= 0.06;
       throttle = clamp(throttle, 0, 1);
 
       const timeToGround = clamp(altitude / Math.max(3, -vy), 1.5, 8);

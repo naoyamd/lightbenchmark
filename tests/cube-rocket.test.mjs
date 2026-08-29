@@ -76,19 +76,22 @@ test("rocket step uses the specified semi-implicit equations and clamps control"
   const params = { ...DEFAULT_PARAMS, phase: 0, windAmp: 0 };
   const control = { throttle: 1.2, gimbal: 0.4 };
   const next = stepPhysics(state, control, params);
-  const u = 1;
-  const delta = 0.35;
-  const ax = 22 * Math.sin(0.1 + delta);
-  const ay = 22 * Math.cos(0.1 + delta) - 9.81;
+  const u = 1 - Math.exp(-0.02 / 0.18);
+  const delta = 0.35 * (1 - Math.exp(-0.02 / 0.12));
+  const aT = 22 * u * (1.12 - 0.12 * (0.5 / 0.65));
+  const ax = aT * Math.sin(0.1 + delta) - 0.0025 * 2 * Math.abs(2);
+  const ay = aT * Math.cos(0.1 + delta) - 9.81 - 0.0025 * (-3) * Math.abs(-3);
   const omega = 0.2 + 0.02 * (8 * u * delta - 0.8 * 0.2);
   assert.equal(next.t, 0.02);
+  assert.equal(next.throttleActual, u);
+  assert.equal(next.gimbalActual, delta);
   assert.ok(Math.abs(next.omega - omega) < 1e-12);
   assert.ok(Math.abs(next.theta - (0.1 + 0.02 * omega)) < 1e-12);
   assert.ok(Math.abs(next.vx - (2 + 0.02 * ax)) < 1e-12);
   assert.ok(Math.abs(next.x - (1 + 0.02 * next.vx)) < 1e-12);
   assert.ok(Math.abs(next.vy - (-3 + 0.02 * ay)) < 1e-12);
   assert.ok(Math.abs(next.y - (10 + 0.02 * next.vy)) < 1e-12);
-  assert.ok(Math.abs(next.fuel - (0.5 - 0.045 * 0.02)) < 1e-12);
+  assert.ok(Math.abs(next.fuel - (0.5 - 0.045 * u * 0.02)) < 1e-12);
   assert.deepEqual(state, { t: 0, x: 1, y: 10, vx: 2, vy: -3, theta: 0.1, omega: 0.2, fuel: 0.5 });
 
   const sensor = makeSensor({ ...state, t: 1.234, y: 12.345, x: 2.345, theta: -0.126, fuel: 0.654 }, params);
@@ -127,18 +130,21 @@ test("rocket reference controller lands the public qualification scenarios", () 
   assert.equal(publicResult.status, "landed");
 
   const qualificationScenarios = [
+    { seed: 0x5eed1234, overrides: {} },
     { seed: 0x12345678, overrides: { g: 9.4 } },
     { seed: 0x9abcdef0, overrides: { aMax: 23.5 } },
-    { seed: 0x10203040, overrides: { windAmp: 0.4, padX: -10 } },
+    { seed: 0x10203040, overrides: { windAmp: 0.4, gustAmp: 0.2, padX: -10 } },
     { seed: 0xdeadbeef, overrides: { g: 10.2, aMax: 20.5, fuel0: 0.55 } },
     {
       seed: 0xcafebabe,
       overrides: { g: 9.4, aMax: 23.5, windAmp: 0.4, padX: 10, padHalf: 5.5, fuel0: 0.75 },
     },
+    { seed: 0x0badf00d, overrides: { dragCoeff: 0.01, gustAmp: 0.2 } },
+    { seed: 0xffffffff, overrides: { g: 10.2, dragCoeff: 0.01, padX: -8 } },
   ];
   const results = qualificationScenarios.map(({ seed, overrides }) => (
     runController(seed, createReferenceController, overrides)
   ));
   const landed = results.filter(({ status }) => status === "landed").length;
-  assert.ok(landed >= 4, `${landed}/5 qualification scenarios landed: ${results.map(({ status }) => status)}`);
+  assert.ok(landed >= Math.ceil(qualificationScenarios.length * 0.8), `${landed}/${qualificationScenarios.length} qualification scenarios landed: ${results.map(({ status }) => status)}`);
 });

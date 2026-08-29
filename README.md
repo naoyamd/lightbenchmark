@@ -5,7 +5,7 @@ LightBenchmarkは、小規模なAIモデルを「見て面白い」「成功・�
 - 閉本の日本語チャットと、公式情報を渡した後の訂正
 - 18連鎖して全消しする、丸い色ぷよの落ちものゲーム
 - 標準6色の3×3ルービックキューブ
-- 観測値から自動制御する垂直着陸toy simulation
+- センサー履歴から速度を推定し、風・突風・抗力・アクチュエータ遅れの中で自動制御する垂直着陸toy simulation
 
 単一の総合点は作りません。課題達成、ロジック、未知入力への頑健性、見やすさ、token・費用・時間・サブエージェント使用量を別々に公開します。
 
@@ -18,7 +18,7 @@ LightBenchmarkは、小規模なAIモデルを「見て面白い」「成功・�
 - `web/` — 結果サイトの静的source
 - `scripts/build-site.mjs` — run検証と`dist/`生成
 
-候補のHTML/CSS/JavaScriptは評価とは分離した観察用showcaseとして公開できます。クリック後だけ`sandbox="allow-scripts"`のopaque-origin iframeで実行し、成功判定は候補画面ではなく独立評価器のJSONだけを正とします。
+候補のHTML/CSS/JavaScriptは評価とは分離した観察用showcaseとして公開できます。モデル専用ページを開くと3つのlive showcaseを初期状態まで`sandbox="allow-scripts"`のopaque-origin iframeへ描画し、外側の課題ボタンで1件ずつ実行します。成功判定は候補画面ではなく独立評価器のJSONだけを正とします。
 
 ## 必要環境
 
@@ -79,7 +79,7 @@ npm run evaluate -- prism-twist C:\isolated\submission\site C:\sealed\fixture.js
 - 新しいモデルを公開後に追加する場合は、新しいhidden fixtureを持つ別cohortにします。
 - ハーネス調整中のrunは`runKind: debug`かつ`status: inconclusive`とし、正式結果へ混ぜません。
 - live showcaseはUTF-8のHTML/CSS/JavaScript/JSON、合計2 MiB以下に限定し、CSP、path traversal、symlink、外部通信、worker、入れ子frameを拒否します。
-- 同時再演は1件だけです。デモのmessageや成功演出はscoreへ反映しません。
+- live showcaseは初期状態を同時に表示できますが、実行は1件だけです。別課題の実行時は前の課題を初期状態へ戻します。デモのmessageや成功演出はscoreへ反映しません。
 
 ## 権利・安全
 

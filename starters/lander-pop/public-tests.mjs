@@ -6,12 +6,18 @@ const first = createScenario(0x5eed1234);
 const second = createScenario(0x5eed1234);
 assert.deepEqual(first, second, "same seed must create the same scenario");
 assert.ok(first.state && first.params);
+assert.equal(first.state.throttleActual, 0);
+assert.equal(first.state.gimbalActual, 0);
 
 const stateCopy = structuredClone(first.state);
 const next = stepPhysics(first.state, { throttle: 0, gimbal: 0 }, first.params);
 assert.deepEqual(first.state, stateCopy, "stepPhysics must not mutate its input");
 assert.equal(next.t, first.state.t + 0.02);
 assert.ok(next.vy < first.state.vy);
+
+const lagged = stepPhysics(first.state, { throttle: 1, gimbal: 0.35 }, first.params);
+assert.ok(lagged.throttleActual > 0 && lagged.throttleActual < 1);
+assert.ok(lagged.gimbalActual > 0 && lagged.gimbalActual < 0.35);
 
 assert.deepEqual(Object.keys(makeSensor(first.state, first.params)).sort(), [
   "altitude",

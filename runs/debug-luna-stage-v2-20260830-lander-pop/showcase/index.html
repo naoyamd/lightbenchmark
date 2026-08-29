@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lander Pop</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      background: #07111d;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+
+    body {
+      background: #07111d;
+      color: #e5f4ff;
+    }
+
+    [data-lightbench-stage] {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      min-height: 420px;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 72% 17%, rgba(74, 161, 201, .13), transparent 25%),
+        linear-gradient(180deg, #071522 0%, #0a2131 58%, #0d2730 100%);
+    }
+
+    #scene {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hud {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      padding: clamp(18px, 3vw, 36px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, .48);
+    }
+
+    .masthead {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .title {
+      margin: 0;
+      color: #f4fbff;
+      font-size: clamp(19px, 2.5vw, 30px);
+      font-weight: 800;
+      letter-spacing: .18em;
+      line-height: 1;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: #79c7d4;
+      font-size: 10px;
+      letter-spacing: .23em;
+      text-transform: uppercase;
+    }
+
+    .badge {
+      border: 1px solid rgba(155, 225, 238, .25);
+      border-radius: 999px;
+      color: #9de4ed;
+      font-size: 10px;
+      letter-spacing: .15em;
+      padding: 8px 11px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      background: rgba(3, 16, 28, .32);
+    }
+
+    .readout {
+      align-self: flex-start;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(58px, 1fr));
+      width: min(100%, 760px);
+      border: 1px solid rgba(145, 222, 233, .18);
+      border-radius: 14px;
+      background: rgba(4, 16, 27, .64);
+      box-shadow: 0 14px 45px rgba(0, 0, 0, .2), inset 0 1px rgba(255, 255, 255, .04);
+      backdrop-filter: blur(10px);
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 13px 14px 12px;
+      border-right: 1px solid rgba(145, 222, 233, .12);
+    }
+
+    .metric:last-child { border-right: 0; }
+
+    .metric-label {
+      display: block;
+      color: #6da9b7;
+      font-size: 9px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      display: inline-block;
+      margin-top: 5px;
+      color: #ecfbff;
+      font-family: "Consolas", "SFMono-Regular", monospace;
+      font-size: clamp(13px, 1.8vw, 18px);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .metric-unit {
+      color: #75aab3;
+      font-size: 10px;
+      margin-left: 3px;
+    }
+
+    #metric-status { color: #77d9e4; }
+    .readout[data-status="landed"] #metric-status { color: #86efba; }
+    .readout[data-status="flying"] #metric-status { color: #77d9e4; }
+    .readout[data-status="hard-crash"],
+    .readout[data-status="off-pad"],
+    .readout[data-status="tip-over"],
+    .readout[data-status="out-of-bounds"] { border-color: rgba(255, 125, 93, .42); }
+    .readout[data-status="hard-crash"] #metric-status,
+    .readout[data-status="off-pad"] #metric-status,
+    .readout[data-status="tip-over"] #metric-status,
+    .readout[data-status="out-of-bounds"] #metric-status { color: #ff9a76; }
+    .readout[data-status="timeout"] #metric-status { color: #ffd17a; }
+
+    .footnote {
+      align-self: flex-end;
+      color: rgba(178, 216, 222, .67);
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 660px) {
+      .readout { grid-template-columns: repeat(3, 1fr); }
+      .metric:nth-child(3) { border-right: 0; }
+      .metric:nth-child(-n+3) { border-bottom: 1px solid rgba(145, 222, 233, .12); }
+      .metric { padding: 10px 11px; }
+      .badge { display: none; }
+      .footnote { font-size: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" data-lightbench-stage aria-label="Lander Pop vertical landing simulation">
+    <canvas id="scene" aria-hidden="true"></canvas>
+    <div class="hud">
+      <div class="masthead">
+        <div>
+          <h1 class="title">LANDER POP</h1>
+          <div class="subtitle">autonomous vertical landing / public-v1</div>
+        </div>
+        <div class="badge">flight computer online</div>
+      </div>
+      <div class="readout" id="readout" data-status="flying">
+        <div class="metric"><span class="metric-label">Altitude</span><span class="metric-value" id="altitude">—</span><span class="metric-unit">m</span></div>
+        <div class="metric"><span class="metric-label">Est. velocity</span><span class="metric-value" id="velocity">—</span><span class="metric-unit">m/s</span></div>
+        <div class="metric"><span class="metric-label">Fuel</span><span class="metric-value" id="fuel">—</span><span class="metric-unit">%</span></div>
+        <div class="metric"><span class="metric-label">Attitude</span><span class="metric-value" id="attitude">—</span><span class="metric-unit">deg</span></div>
+        <div class="metric"><span class="metric-label">Wind</span><span class="metric-value" id="wind">—</span><span class="metric-unit">m/s</span></div>
+        <div class="metric"><span class="metric-label">Status</span><span class="metric-value" id="metric-status">FLYING</span></div>
+      </div>
+      <div class="footnote">educational toy simulation · not for real flight</div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { classify, createScenario, makeSensor, stepPhysics } from "./sim.mjs";
+    import { createController } from "./controller.mjs";
+
+    const PUBLIC_SEED = 0x5eed1234;
+    const DT = 0.02;
+    const CONTROL_EVERY = 5;
+    const MAX_STEPS = 1000;
+    const TAU = Math.PI * 2;
+
+    const stage = document.querySelector("[data-lightbench-stage]");
+    const canvas = document.getElementById("scene");
+    const context = canvas.getContext("2d");
+    const readout = document.getElementById("readout");
+    const altitudeEl = document.getElementById("altitude");
+    const velocityEl = document.getElementById("velocity");
+    const fuelEl = document.getElementById("fuel");
+    const attitudeEl = document.getElementById("attitude");
+    const windEl = document.getElementById("wind");
+    const statusEl = document.getElementById("metric-status");
+
+    let scenario;
+    let params;
+    let state;
+    let status;
+    let eventLog;
+    let displayedIndex;
+    let animationId = 0;
+    let pendingResolve = null;
+    let currentRun = null;
+    let generation = 0;
+
+    const statusText = {
+      flying: "FLYING",
+      landed: "LANDED",
+      "hard-crash": "HARD CRASH",
+      "off-pad": "OFF PAD",
+      "tip-over": "TIP OVER",
+      "out-of-bounds": "OUT OF BOUNDS",
+      timeout: "TIMEOUT",
+    };
+
+    function copy(value) {
+      if (typeof structuredClone === "function") return structuredClone(value);
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function clamp(value, low, high) {
+      return Math.min(high, Math.max(low, value));
+    }
+
+    function format(value, digits = 1) {
+      const n = Number.isFinite(value) ? value : 0;
+      return n.toFixed(digits);
+    }
+
+    function windAt(t) {
+      return params.windAmp * Math.sin(0.07 * t + params.phase) +
+        params.gustAmp * Math.sin(2.3 * t + 0.5 * params.phase);
+    }
+
+    function resizeCanvas() {
+      const rect = stage.getBoundingClientRect();
+      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+      canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      paint(eventLog[displayedIndex] || null);
+    }
+
+    function worldView(activeState) {
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      const worldTop = clamp(Math.max(120, activeState.y + 25), 120, 170);
+      const scale = Math.max(2.7, Math.min((height - 120) / worldTop, width / 112));
+      return {
+        width,
+        height,
+        scale,
+        groundY: height - 78,
+        originX: width / 2 - params.padX * scale,
+        sx(x) { return this.originX + x * scale; },
+        sy(y) { return this.groundY - y * scale; },
+      };
+    }
+
+    function roundedRect(ctx, x, y, w, h, r) {
+      const radius = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + w, y, x + w, y + h, radius);
+      ctx.arcTo(x + w, y + h, x, y + h, radius);
+      ctx.arcTo(x, y + h, x, y, radius);
+      ctx.arcTo(x, y, x + w, y, radius);
+      ctx.closePath();
+    }
+
+    function drawStars(width, height) {
+      const stars = [
+        [0.06, .13, 1.2, .5], [0.14, .29, .8, .36], [0.21, .09, 1.3, .48],
+        [0.29, .21, .7, .38], [0.37, .08, .9, .4], [0.45, .32, 1.1, .32],
+        [0.54, .16, .65, .44], [0.62, .07, 1.1, .34], [0.69, .35, .8, .38],
+        [0.78, .22, 1.4, .5], [0.87, .1, .7, .42], [0.94, .3, 1.0, .36],
+        [0.11, .48, .65, .3], [0.31, .43, .55, .28], [0.74, .48, .6, .3],
+        [0.9, .56, .75, .3], [0.58, .52, .5, .3],
+      ];
+      for (const [x, y, r, a] of stars) {
+        context.beginPath();
+        context.fillStyle = `rgba(190, 235, 240, ${a})`;
+        context.arc(width * x, height * y, r, 0, TAU);
+        context.fill();
+      }
+    }
+
+    function drawGround(view) {
+      const { width, height, groundY, scale } = view;
+      const groundGradient = context.createLinearGradient(0, groundY, 0, height);
+      groundGradient.addColorStop(0, "#173944");
+      groundGradient.addColorStop(1, "#07151f");
+      context.fillStyle = groundGradient;
+      context.fillRect(0, groundY, width, height - groundY);
+      context.strokeStyle = "rgba(117, 214, 216, .34)";
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(0, groundY + .5);
+      context.lineTo(width, groundY + .5);
+      context.stroke();
+
+      context.strokeStyle = "rgba(118, 189, 193, .12)";
+      context.lineWidth = 1;
+      for (let x = -width; x < width * 2; x += Math.max(28, scale * 8)) {
+        context.beginPath();
+        context.moveTo(x, groundY + 12);
+        context.lineTo(x + 34, height);
+        context.stroke();
+      }
+    }
+
+    function drawCorridor(view) {
+      const corridor = params.padHalf + 4;
+      const top = Math.min(66, Math.max(40, state.y * .62));
+      const leftBottom = view.sx(params.padX - params.padHalf);
+      const rightBottom = view.sx(params.padX + params.padHalf);
+      const leftTop = view.sx(params.padX - corridor);
+      const rightTop = view.sx(params.padX + corridor);
+      context.save();
+      context.setLineDash([6, 8]);
+      context.lineWidth = 1;
+      context.strokeStyle = "rgba(107, 224, 216, .38)";
+      context.beginPath();
+      context.moveTo(leftBottom, view.groundY - 4);
+      context.lineTo(leftTop, view.sy(top));
+      context.moveTo(rightBottom, view.groundY - 4);
+      context.lineTo(rightTop, view.sy(top));
+      context.stroke();
+      context.restore();
+      context.fillStyle = "rgba(119, 213, 211, .58)";
+      context.font = "10px Consolas, monospace";
+      context.fillText("APPROACH CORRIDOR", leftTop + 8, view.sy(top) - 8);
+    }
+
+    function drawPad(view, activeStatus) {
+      const x = view.sx(params.padX);
+      const y = view.groundY - 5;
+      const padWidth = (params.padHalf * 2 + 2.5) * view.scale;
+      const isLanded = activeStatus === "landed";
+      context.save();
+      context.shadowBlur = isLanded ? 30 : 14;
+      context.shadowColor = isLanded ? "rgba(105, 255, 178, .72)" : "rgba(86, 225, 228, .32)";
+      roundedRect(context, x - padWidth / 2, y - 7, padWidth, 10, 5);
+      context.fillStyle = isLanded ? "#76e7ae" : "#5dd1d2";
+      context.fill();
+      context.shadowBlur = 0;
+      context.strokeStyle = "rgba(225, 255, 252, .7)";
+      context.lineWidth = 1;
+      context.stroke();
+      context.fillStyle = "rgba(4, 34, 42, .7)";
+      context.font = "bold 9px Consolas, monospace";
+      context.textAlign = "center";
+      context.fillText("LZ  00", x, y + 1);
+      context.textAlign = "left";
+      context.restore();
+    }
+
+    function drawWind(view, activeState) {
+      const wind = windAt(activeState.t);
+      const x = 34;
+      const y = Math.max(112, view.height * .25);
+      const direction = wind < -.005 ? -1 : 1;
+      const length = 30 + Math.min(58, Math.abs(wind) * 95);
+      const end = x + direction * length;
+      context.save();
+      context.strokeStyle = Math.abs(wind) > .2 ? "#f6c76d" : "#82d8d7";
+      context.globalAlpha = .9;
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(x, y);
+      context.lineTo(end, y);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(end, y);
+      context.lineTo(end - direction * 9, y - 6);
+      context.moveTo(end, y);
+      context.lineTo(end - direction * 9, y + 6);
+      context.stroke();
+      context.fillStyle = "rgba(184, 230, 229, .76)";
+      context.font = "10px Consolas, monospace";
+      context.fillText("WIND", x, y - 12);
+      context.restore();
+    }
+
+    function drawTrajectory(view, activeStatus) {
+      if (displayedIndex < 0 || eventLog.length === 0) return;
+      const end = Math.min(displayedIndex, eventLog.length - 1);
+      context.save();
+      context.lineWidth = 2;
+      context.lineJoin = "round";
+      context.strokeStyle = activeStatus === "landed" ? "rgba(111, 240, 178, .82)" :
+        activeStatus === "flying" ? "rgba(102, 224, 235, .76)" : "rgba(255, 137, 104, .8)";
+      context.beginPath();
+      for (let i = 0; i <= end; i += 1) {
+        const point = eventLog[i].state;
+        const px = view.sx(point.x);
+        const py = view.sy(point.y);
+        if (i === 0) context.moveTo(px, py);
+        else context.lineTo(px, py);
+      }
+      context.stroke();
+      const last = eventLog[end].state;
+      context.fillStyle = context.strokeStyle;
+      context.beginPath();
+      context.arc(view.sx(last.x), view.sy(last.y), 3.5, 0, TAU);
+      context.fill();
+      context.restore();
+    }
+
+    function drawSmoke(x, y, color = "#ff8668") {
+      context.save();
+      context.globalAlpha = .55;
+      for (let i = 0; i < 6; i += 1) {
+        const r = 5 + ((i * 7) % 11);
+        context.fillStyle = i % 2 ? "#a8b7b7" : color;
+        context.beginPath();
+        context.arc(x + (i - 3) * 8, y - i * 4, r, 0, TAU);
+        context.fill();
+      }
+      context.restore();
+    }
+
+    function drawRocket(view, activeState, activeStatus) {
+      const px = view.sx(activeState.x);
+      const py = view.sy(activeState.y);
+      const scale = view.scale;
+      const bodyH = Math.max(34, scale * 8.2);
+      const bodyW = Math.max(16, scale * 2.35);
+      const theta = activeState.theta;
+      const plume = Math.max(4, bodyH * (.16 + .84 * clamp(activeState.throttleActual, 0, 1)));
+      const broken = activeStatus === "hard-crash" || activeStatus === "off-pad" ||
+        activeStatus === "tip-over" || activeStatus === "out-of-bounds";
+      context.save();
+      context.translate(px, py);
+      context.rotate(-theta);
+
+      if (!broken && activeState.throttleActual > .015) {
+        context.save();
+        context.shadowBlur = 20;
+        context.shadowColor = "rgba(255, 164, 75, .85)";
+        const plumeGradient = context.createLinearGradient(0, 0, 0, plume);
+        plumeGradient.addColorStop(0, "#fff7b3");
+        plumeGradient.addColorStop(.24, "#ffbb5c");
+        plumeGradient.addColorStop(1, "rgba(255, 80, 50, 0)");
+        context.fillStyle = plumeGradient;
+        context.beginPath();
+        context.moveTo(-bodyW * .31, bodyH * .45);
+        context.lineTo(bodyW * .31, bodyH * .45);
+        context.lineTo(bodyW * (.13 + .18 * Math.abs(activeState.gimbalActual)), bodyH * .45 + plume);
+        context.lineTo(-bodyW * (.13 + .18 * Math.abs(activeState.gimbalActual)), bodyH * .45 + plume);
+        context.closePath();
+        context.fill();
+        context.restore();
+      }
+
+      context.shadowBlur = broken ? 0 : 14;
+      context.shadowColor = "rgba(87, 219, 232, .34)";
+      const bodyGradient = context.createLinearGradient(-bodyW / 2, 0, bodyW / 2, 0);
+      bodyGradient.addColorStop(0, broken ? "#8e4f4a" : "#c9e8eb");
+      bodyGradient.addColorStop(.46, broken ? "#d27b68" : "#f3fbf6");
+      bodyGradient.addColorStop(1, broken ? "#713c47" : "#83c1ca");
+      context.fillStyle = bodyGradient;
+      roundedRect(context, -bodyW / 2, -bodyH, bodyW, bodyH * 1.45, bodyW * .26);
+      context.fill();
+      context.shadowBlur = 0;
+
+      context.fillStyle = broken ? "#522c37" : "#315f70";
+      context.beginPath();
+      context.moveTo(-bodyW * .48, -bodyH * .86);
+      context.lineTo(0, -bodyH * 1.22);
+      context.lineTo(bodyW * .48, -bodyH * .86);
+      context.closePath();
+      context.fill();
+      context.fillStyle = broken ? "#572b38" : "#69cdd2";
+      context.beginPath();
+      context.ellipse(0, -bodyH * .78, bodyW * .25, bodyH * .17, 0, 0, TAU);
+      context.fill();
+      context.strokeStyle = "rgba(240, 255, 252, .75)";
+      context.lineWidth = 1;
+      context.stroke();
+
+      context.fillStyle = broken ? "#6b343c" : "#ef6d55";
+      context.beginPath();
+      context.moveTo(-bodyW * .48, bodyH * .2);
+      context.lineTo(-bodyW * .9, bodyH * .58);
+      context.lineTo(-bodyW * .25, bodyH * .43);
+      context.closePath();
+      context.fill();
+      context.beginPath();
+      context.moveTo(bodyW * .48, bodyH * .2);
+      context.lineTo(bodyW * .9, bodyH * .58);
+      context.lineTo(bodyW * .25, bodyH * .43);
+      context.closePath();
+      context.fill();
+
+      context.strokeStyle = broken ? "#d37a6c" : "#a9d9da";
+      context.lineWidth = Math.max(1.5, scale * .28);
+      context.beginPath();
+      context.moveTo(-bodyW * .32, bodyH * .37);
+      context.lineTo(-bodyW * .62, bodyH * .78);
+      context.lineTo(-bodyW * .95, bodyH * .82);
+      context.moveTo(bodyW * .32, bodyH * .37);
+      context.lineTo(bodyW * .62, bodyH * .78);
+      context.lineTo(bodyW * .95, bodyH * .82);
+      context.stroke();
+
+      context.fillStyle = "#172f40";
+      context.beginPath();
+      context.arc(0, -bodyH * .77, Math.max(2.5, bodyW * .11), 0, TAU);
+      context.fill();
+      context.restore();
+
+      if (broken && activeStatus !== "out-of-bounds") drawSmoke(px, py + bodyH * .2);
+    }
+
+    function estimateVelocity(index) {
+      if (index < 0 || eventLog.length === 0) return { x: 0, y: 0 };
+      const here = eventLog[index];
+      let priorIndex = index;
+      while (priorIndex > 0 && here.sensor.t - eventLog[priorIndex].sensor.t < .09) priorIndex -= 1;
+      if (priorIndex === index) priorIndex = Math.max(0, index - CONTROL_EVERY);
+      const prior = eventLog[priorIndex];
+      const dt = here.sensor.t - prior.sensor.t;
+      if (!(dt > 0)) return { x: 0, y: 0 };
+      return {
+        x: (here.sensor.xOffset - prior.sensor.xOffset) / dt,
+        y: (here.sensor.altitude - prior.sensor.altitude) / dt,
+      };
+    }
+
+    function updateHud(activeState, activeSensor, activeStatus, index) {
+      const estimates = estimateVelocity(index);
+      const wind = windAt(activeState.t);
+      altitudeEl.textContent = format(Math.max(0, activeSensor.altitude));
+      velocityEl.textContent = `${format(estimates.y, 1)} / ${format(estimates.x, 1)}`;
+      fuelEl.textContent = format(100 * activeSensor.fuel / Math.max(.001, params.fuel0), 0);
+      attitudeEl.textContent = format(activeSensor.theta * 180 / Math.PI, 1);
+      windEl.textContent = `${wind >= 0 ? "+" : ""}${format(wind, 2)}`;
+      statusEl.textContent = statusText[activeStatus] || "FLYING";
+      readout.dataset.status = activeStatus;
+    }
+
+    function paint(record = null, index = displayedIndex) {
+      if (!params || !state) return;
+      const activeState = record ? record.state : state;
+      const activeStatus = record ? record.status : status;
+      const activeSensor = record ? record.sensor : makeSensor(activeState, params);
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      context.clearRect(0, 0, width, height);
+      const sky = context.createLinearGradient(0, 0, 0, height);
+      sky.addColorStop(0, "#071420");
+      sky.addColorStop(.62, "#0b2635");
+      sky.addColorStop(1, "#0d2c32");
+      context.fillStyle = sky;
+      context.fillRect(0, 0, width, height);
+      drawStars(width, height);
+      const view = worldView(activeState);
+      drawGround(view);
+      drawCorridor(view);
+      drawTrajectory(view, activeStatus);
+      drawPad(view, activeStatus);
+      drawWind(view, activeState);
+      drawRocket(view, activeState, activeStatus);
+
+      if (activeStatus !== "flying") {
+        context.save();
+        context.fillStyle = activeStatus === "landed" ? "rgba(90, 234, 170, .08)" : "rgba(255, 108, 87, .08)";
+        context.fillRect(0, 0, width, height);
+        context.restore();
+      }
+      updateHud(activeState, activeSensor, activeStatus, index);
+    }
+
+    function clearAnimations() {
+      if (animationId) cancelAnimationFrame(animationId);
+      animationId = 0;
+      stage.getAnimations?.().forEach((animation) => animation.cancel());
+    }
+
+    function reset() {
+      generation += 1;
+      clearAnimations();
+      if (pendingResolve) pendingResolve(publicSnapshot());
+      pendingResolve = null;
+      currentRun = null;
+      scenario = createScenario(PUBLIC_SEED);
+      params = scenario.params;
+      state = copy(scenario.state);
+      status = classify(state, params);
+      eventLog = [];
+      displayedIndex = -1;
+      paint();
+      return publicSnapshot();
+    }
+
+    function publicSnapshot() {
+      const solved = eventLog.some((entry) => entry.status === "landed") && status === "landed";
+      const chain = eventLog.reduce((count, entry) => count + (entry.status === "landed" ? 1 : 0), 0);
+      const latest = eventLog[displayedIndex] || eventLog[eventLog.length - 1];
+      return {
+        state: copy(state),
+        params: copy(params),
+        status,
+        solved,
+        landed: solved,
+        chain,
+        eventLog: copy(eventLog),
+        sensor: copy(latest?.sensor || makeSensor(state, params)),
+        control: copy(latest?.control || { throttle: 0, gimbal: 0 }),
+      };
+    }
+
+    function telemetry() {
+      const latest = eventLog[eventLog.length - 1];
+      const log = copy(eventLog);
+      return {
+        state: copy(state),
+        sensor: copy(latest?.sensor || makeSensor(state, params)),
+        control: copy(latest?.control || { throttle: 0, gimbal: 0 }),
+        status,
+        solved: status === "landed",
+        landed: status === "landed",
+        chain: log.reduce((count, entry) => count + (entry.status === "landed" ? 1 : 0), 0),
+        log,
+        eventLog: copy(log),
+      };
+    }
+
+    function buildRunLog() {
+      const autopilot = createController();
+      let simulated = copy(scenario.state);
+      let command = { throttle: 0, gimbal: 0 };
+      let simulatedStatus = classify(simulated, params);
+      const records = [];
+      for (let step = 0; step < MAX_STEPS && simulatedStatus === "flying"; step += 1) {
+        if (step % CONTROL_EVERY === 0) {
+          const nextCommand = autopilot.step(makeSensor(simulated, params));
+          command = {
+            throttle: clamp(Number.isFinite(nextCommand?.throttle) ? nextCommand.throttle : 0, 0, 1),
+            gimbal: clamp(Number.isFinite(nextCommand?.gimbal) ? nextCommand.gimbal : 0, -.35, .35),
+          };
+        }
+        simulated = stepPhysics(simulated, command, params);
+        simulatedStatus = classify(simulated, params);
+        records.push({
+          step,
+          state: copy(simulated),
+          sensor: makeSensor(simulated, params),
+          control: copy(command),
+          status: simulatedStatus,
+        });
+      }
+      return { records, finalState: simulated, finalStatus: simulatedStatus };
+    }
+
+    function run(options = {}) {
+      if (currentRun) return currentRun;
+      if (eventLog.length > 0 || status !== "flying") reset();
+      const token = generation;
+      const { records, finalState, finalStatus } = buildRunLog();
+      eventLog = records;
+      state = copy(finalState);
+      status = finalStatus;
+      displayedIndex = -1;
+      const requestedSpeed = Number(options?.speed);
+      const speed = Number.isFinite(requestedSpeed) && requestedSpeed > 0 ? requestedSpeed : 1;
+      const animate = options?.animate !== false;
+      const stride = animate ? Math.max(1, Math.ceil(records.length / (72 * speed))) : records.length;
+      let frame = 0;
+      currentRun = new Promise((resolve) => {
+        pendingResolve = resolve;
+        const drawFrame = () => {
+          if (token !== generation) return;
+          displayedIndex = Math.min(records.length - 1, frame * stride);
+          const record = records[displayedIndex];
+          state = copy(record.state);
+          status = record.status;
+          paint(record, displayedIndex);
+          if (!animate || displayedIndex >= records.length - 1) {
+            state = copy(finalState);
+            status = finalStatus;
+            displayedIndex = records.length - 1;
+            paint(records[displayedIndex], displayedIndex);
+            currentRun = null;
+            pendingResolve = null;
+            resolve(publicSnapshot());
+            return;
+          }
+          frame += 1;
+          animationId = requestAnimationFrame(drawFrame);
+        };
+        animationId = requestAnimationFrame(drawFrame);
+      });
+      return currentRun;
+    }
+
+    window.__LIGHTBENCH__ = { reset, run, snapshot: publicSnapshot, telemetry };
+    window.addEventListener("resize", resizeCanvas, { passive: true });
+    reset();
+  </script>
+</body>
+</html>

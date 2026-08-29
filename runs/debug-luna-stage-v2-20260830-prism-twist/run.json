@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-stage-v2-20260830-prism-twist",
+  "cohortId": "debug-luna-stage-v2-20260830",
+  "taskId": "prism-twist",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-29T18:22:39.682Z",
+    "endedAt": "2026-08-29T18:34:39.682Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720000,
+    "agentSteps": 28,
+    "toolCalls": 24,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "codexHomeIsolation": "auth-only-temporary-home",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720000,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 28,
+        "withinLimit": false
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "CUBE-1.3",
+    "commonPrompt": "CODE-1.3",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1"
+  },
+  "hashes": {
+    "prompt": "0dc0b4f2482d8b215e88ecde02922a068bd64079e14a7cc22a4e26a86f28d854",
+    "starter": "47594be9b6c6d9ceeb03f08ddf89eb14a62c1107d970a8f7782db740ca311f4a",
+    "candidateSite": "558e2431e803ccd4e87dec30fbadc78333c0b4b340bd6ca27fa0d7e5b62ae0c1",
+    "evaluator": "7d82f4f6880542ee719b5d9ef399b68ae8578de3ca82545380f7d003df684b07",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。",
+      "agentSteps budget exceeded"
+    ],
+    "measurementFailures": [],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "prism-twist",
+      "fixture": {
+        "sha256": "92e04547018c07d72a471f0bb90ab440b7b937760425459b2bdab8db7da0f7c7"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "solved representation",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "deterministic scramble (3 seeds)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "move states equal oracle (5 algorithms)",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "scramble is solved only through inverse moves",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "invalid algorithm is atomic",
+          "kind": "logic",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": true,
+      "robustnessPass": true,
+      "pass": true
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": true
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

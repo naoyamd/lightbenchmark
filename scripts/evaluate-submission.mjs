@@ -38,7 +38,16 @@ const defaultFixtures = {
     ],
   },
   "lander-pop": {
-    scenarios: [{ seed: 0x5eed1234, overrides: {} }],
+    scenarios: [
+      { seed: 0x5eed1234, overrides: {} },
+      { seed: 0x12345678, overrides: { g: 9.4 } },
+      { seed: 0x9abcdef0, overrides: { aMax: 20.5 } },
+      { seed: 0x10203040, overrides: { windAmp: 0.4, gustAmp: 0.2, padX: -10 } },
+      { seed: 0xdeadbeef, overrides: { g: 10.2, aMax: 20.5, fuel0: 0.55 } },
+      { seed: 0xcafebabe, overrides: { g: 9.4, aMax: 23.5, windAmp: 0.4, padX: 10, padHalf: 5.5, fuel0: 0.75 } },
+      { seed: 0x0badf00d, overrides: { dragCoeff: 0.01, gustAmp: 0.2 } },
+      { seed: 0xffffffff, overrides: { g: 10.2, dragCoeff: 0.01, padX: -8 } },
+    ],
   },
 };
 
@@ -71,6 +80,16 @@ async function rejectCandidateSymlinks(directory) {
     if (info.isSymbolicLink()) throw new Error(`candidate symlinks are not allowed: ${file}`);
     if (info.isDirectory()) await rejectCandidateSymlinks(file);
   }
+}
+
+async function controllerImportsSimulation(directory) {
+  const source = await readFile(path.join(path.resolve(directory), "controller.mjs"), "utf8");
+  const imports = source.matchAll(/(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["']([^"']+)["']/gu);
+  for (const match of imports) {
+    const file = match[1].replaceAll("\\", "/").split("/").at(-1).split(/[?#]/u)[0];
+    if (/^(?:sim|rocket)(?:\.[a-z0-9]+)?$/iu.test(file)) return true;
+  }
+  return false;
 }
 
 async function startCandidateClient(mode, directory) {
@@ -369,15 +388,44 @@ export async function evaluateCubeModule(candidate, fixture = defaultFixtures["p
   return summarize("prism-twist", fixture, checks);
 }
 
-function rocketPhysicsCases(count = 100) {
-  const params = { ...rocketOracle.DEFAULT_PARAMS, phase: 0.73 };
-  let state = rocketOracle.createScenario(0x10203040, params).state;
-  return Array.from({ length: count }, (_, index) => {
-    const control = { throttle: (index % 11) / 10, gimbal: ((index % 15) - 7) / 20 };
-    const item = { state, control, params };
-    state = rocketOracle.stepPhysics(state, control, params);
-    return item;
-  });
+function rocketPhysicsCases(count = 180) {
+  const cases = [];
+  const seeds = [0x10203040, 0x31415926, 0x89abcdef, 0xffffffff];
+  const overrides = [
+    { phase: 0.73 },
+    { g: 9.4, windAmp: 0.4, gustAmp: 0.2 },
+    { aMax: 23.5, dragCoeff: 0.01, padX: -10 },
+    { g: 10.2, aMax: 20.5, fuel0: 0.55, padX: 10, padHalf: 5.5 },
+  ];
+  for (let lane = 0; lane < seeds.length && cases.length < count; lane += 1) {
+    const params = { ...rocketOracle.DEFAULT_PARAMS, ...overrides[lane] };
+    let state = rocketOracle.createScenario(seeds[lane], params).state;
+    for (let index = 0; index < 60 && cases.length < count; index += 1) {
+      const control = {
+        throttle: ((index * 7 + lane) % 15 - 3) / 10,
+        gimbal: ((index * 11 + lane * 3) % 19 - 9) / 18,
+      };
+      cases.push({ state, control, params });
+      state = rocketOracle.stepPhysics(state, control, params);
+    }
+  }
+  return cases;
+}
+
+function landingDiagnostics(state, params) {
+  const safetyMargin = {
+    pad: params.padHalf - Math.abs(state.x - params.padX),
+    vx: 2 - Math.abs(state.vx),
+    vy: 3 - Math.abs(state.vy),
+    theta: 8 * Math.PI / 180 - Math.abs(state.theta),
+    omega: 15 * Math.PI / 180 - Math.abs(state.omega),
+  };
+  return {
+    landingTime: state.t,
+    fuel: state.fuel,
+    safetyMargin,
+    minSafetyMargin: Math.min(...Object.values(safetyMargin)),
+  };
 }
 
 export async function evaluateRocketModules(sim, controller, fixture = defaultFixtures["lander-pop"]) {
@@ -394,7 +442,7 @@ export async function evaluateRocketModules(sim, controller, fixture = defaultFi
     return true;
   }));
   const physics = fixture.physics ?? rocketPhysicsCases();
-  checks.push(await check(`physics differential (${physics.length} steps)`, "logic", async () => {
+  checks.push(await check(`physics differential (${physics.length} steps)`, "robustness", async () => {
     for (const { state, control, params } of physics) {
       if (!same(await sim.stepPhysics(clone(state), clone(control), clone(params)), rocketOracle.stepPhysics(state, control, params), 1e-10)) {
         return false;
@@ -433,7 +481,7 @@ export async function evaluateRocketModules(sim, controller, fixture = defaultFi
           status = rocketOracle.classify(state, scenarioParams);
         }
       }
-      landings.push({ seed: scenario.seed, status });
+      landings.push({ seed: scenario.seed, status, ...landingDiagnostics(state, scenarioParams) });
     } catch (error) {
       landings.push({ seed: scenario.seed, status: "controller-error", error: error instanceof Error ? error.message : String(error) });
     }
@@ -471,6 +519,14 @@ export async function evaluateSubmission(taskId, submissionDirectory, fixtureFil
       const client = await startCandidateClient(taskId, submissionDirectory);
       clients.push(client);
       return await evaluateCubeModule(client.module("engine"), fixture);
+    }
+    if (await controllerImportsSimulation(submissionDirectory)) {
+      return summarize("lander-pop", fixture, [{
+        name: "controller sensor-only contract",
+        kind: "logic",
+        pass: false,
+        detail: "controller.mjs must not import sim.mjs or rocket.mjs",
+      }]);
     }
     const simClient = await startCandidateClient("lander-pop-sim", submissionDirectory);
     clients.push(simClient);

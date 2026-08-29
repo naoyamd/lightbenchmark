@@ -8,12 +8,14 @@ const closeButton = document.querySelector('#dialog-close');
 let runs = [];
 let activeShowcase = null;
 let requestSerial = 0;
+const showcaseSessions = new WeakMap();
+const showcaseMarker = '__LIGHTBENCH_ASSET_ROOT_9b41c8__';
 
 const taskDefinitions = [
   { id: 'japanese-chat', number: '01', title: '日本語チャット', summary: '閉本で答え、資料を読んだ後に自分の誤りを訂正する。' },
-  { id: 'color-cascade-18', number: '02', title: 'ぷよぷよ風・18連鎖全消し', summary: '丸い色ぷよが落ちる6列盤で、実ロジックによる18連鎖と全消しを再演する。', visualVersion: 'PUYO-1.3' },
-  { id: 'prism-twist', number: '03', title: '3×3 ルービックキューブ', summary: '標準6色・黒い境界の3×3キューブを、実際の面回転だけで揃える。', visualVersion: 'CUBE-1.2' },
-  { id: 'lander-pop', number: '04', title: 'ロケット垂直着陸', summary: '同じ初期条件から自動制御し、着陸・墜落・転倒までそのまま見せる。' },
+  { id: 'color-cascade-18', number: '02', title: 'ぷよぷよ風・18連鎖全消し', summary: '丸い色ぷよが落ちる6列盤で、実ロジックによる18連鎖と全消しを再演する。', visualVersion: 'PUYO-1.4' },
+  { id: 'prism-twist', number: '03', title: '3×3 ルービックキューブ', summary: '標準6色・黒い境界の3×3キューブを、実際の面回転だけで揃える。', visualVersion: 'CUBE-1.3' },
+  { id: 'lander-pop', number: '04', title: 'ロケット垂直着陸・自動制御', summary: '突風・抗力・アクチュエータ遅れの中で自動制御し、着陸・墜落・転倒まで実状態で見せる。', visualVersion: 'LANDER-2.0' },
 ];
 
 const labels = {
@@ -95,7 +97,7 @@ function demoMessage(run) {
 }
 
 function evaluationSummary(run) {
-  if (run.evaluation === null || run.evaluation === undefined) return '';
+  if (run.evaluation === null || run.evaluation === undefined) return '<section class="evaluation-summary"><h3>独立評価</h3><p>取得不能</p></section>';
   if (typeof run.evaluation !== 'object') return `<section class="evaluation-summary"><h3>独立評価</h3><p>${text(run.evaluation)}</p></section>`;
   let passes = [run.evaluation.headline, run.evaluation.logic, run.evaluation.robustness]
     .map(item => item?.pass).filter(value => typeof value === 'boolean');
@@ -118,10 +120,13 @@ function showcaseMarkup(run, compact = false) {
     return `<section class="showcase chat-showcase${compact ? ' showcase-compact' : ''}"><h3>チャット</h3>${turns.map(turn => `<div class="chat-turn"><strong>${text(turn.label ?? 'チャット')}</strong><pre class="chat-transcript">${escapeHtml(typeof turn.text === 'string' ? turn.text : '取得不能')}</pre></div>`).join('') || '<p class="showcase-empty">取得不能</p>'}</section>`;
   }
   if (showcaseKind(run) !== 'live') return showcaseMissing(run);
+  const plan = showcaseActions(run.taskId);
+  if (!plan) return showcaseMissing(run);
   const index = runs.indexOf(run);
-  return `<section class="showcase live-showcase${compact ? ' showcase-compact' : ''}" data-showcase-container>
-    <button class="showcase-button" type="button" data-showcase-run-index="${index}">再演する</button>
-    <span class="showcase-status">クリックで生成</span>
+  return `<section class="showcase live-showcase${compact ? ' showcase-compact' : ''}" data-showcase-container data-showcase-index="${index}">
+    <div class="showcase-visual" data-showcase-visual><p class="showcase-loading">実ビジュアルを準備中…</p></div>
+    <div class="showcase-controls"><button class="showcase-button" type="button" data-showcase-run-index="${index}" disabled>${text(plan.label)}</button>
+    <span class="showcase-status" aria-live="polite">準備中…</span></div>
   </section>`;
 }
 
@@ -149,7 +154,7 @@ function visualContract(definition, run) {
   if (actual !== definition.visualVersion) {
     return `<p class="visual-contract visual-contract-old"><strong>旧ビジュアル契約のrun</strong> · ${text(actual)}。抽象的な宝石・記号表現を許していたため、現在の「見慣れた見た目」評価には採用しません。</p>`;
   }
-  return '<p class="visual-contract"><strong>視覚評価対象</strong> · 再演して、課題名から想像する見た目と操作になっているかを確認できます。</p>';
+  return '<p class="visual-contract"><strong>視覚評価対象</strong> · 実行ボタンで、課題名から想像する見た目と操作を確認できます。</p>';
 }
 
 function previousAttempts(items, primary) {
@@ -168,11 +173,11 @@ function taskResult(definition, modelRuns) {
   const total = run.usage?.total;
   return `<article class="task-result" id="task-${definition.id}">
     <header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><a href="./prompts/${definition.id}.prompt.html">${promptLabel} ↗</a></header>
-    ${visualContract(definition, run)}
     ${showcaseMarkup(run)}
+    ${visualContract(definition, run)}
     ${evaluationSummary(run)}
     ${artifactGallery(run)}
-    <div class="run-head"><div><strong>${text(run.model?.displayName)}</strong><span>${text(run.model?.modelId)}</span></div>${statusBadge(run)}</div>
+    <div class="run-head"><div><strong>model: ${text(run.model?.displayName)}</strong><span>modelId: ${text(run.model?.modelId)}</span></div>${statusBadge(run)}</div>
     <dl class="metrics">
       ${metric('合計トークン', formatNumber(total?.totalTokens))}
       ${metric('サブエージェント', formatNumber(run.agents?.spawned))}
@@ -189,6 +194,13 @@ function bindResultActions() {
   bindShowcaseButtons(results);
 }
 
+function mountModelShowcases() {
+  results.querySelectorAll('[data-showcase-container]').forEach(container => {
+    const run = runs[Number(container.dataset.showcaseIndex)];
+    if (run) mountShowcase(run, container);
+  });
+}
+
 function renderModelPage(modelId) {
   const modelRuns = runs.filter(run => run.model?.modelId === modelId && run.demo !== true && run.isDemo !== true);
   if (!modelRuns.length) {
@@ -199,10 +211,11 @@ function renderModelPage(modelId) {
   document.body.classList.add('model-page');
   pageNav.hidden = false;
   pageTitle.innerHTML = `${text(model.displayName)}<span>の4課題。</span>`;
-  pageLede.textContent = `${model.modelId} の生成物を、同じページで上から順に再演できます。成功演出ではなく独立評価の記録を判定に使います。`;
+  pageLede.textContent = `${model.modelId} の実演を先に表示し、独立評価の記録をあわせて確認できます。`;
   results.className = 'model-results';
   results.innerHTML = taskDefinitions.map(definition => taskResult(definition, modelRuns)).join('');
   bindResultActions();
+  mountModelShowcases();
 }
 
 function renderModelIndex() {
@@ -213,14 +226,16 @@ function renderModelIndex() {
     models.get(run.model.modelId).push(run);
   }
   const entries = [...models.values()].sort((first, second) => String(first[0].model.displayName).localeCompare(String(second[0].model.displayName)));
-  pageTitle.innerHTML = 'モデルごとに、<span>4つの実演。</span>';
+  pageTitle.innerHTML = '評価と実演を、<span>モデルごとに。</span>';
   pageLede.textContent = 'カードを選ぶと、そのモデルの日本語・ぷよぷよ風ゲーム・3×3キューブ・ロケット着陸を1ページで追えます。';
   results.className = 'model-index';
   results.innerHTML = entries.map(items => {
     const newest = sortedNewest(items)[0];
-    const completedTasks = new Set(items.map(run => run.taskId)).size;
-    const liveTasks = new Set(items.filter(run => run.showcase).map(run => run.taskId)).size;
-    return `<a class="model-card" href="${text(newest.model.pageUrl)}"><p class="model-card-kicker">MODEL</p><h2>${text(newest.model.displayName)}</h2><p>${text(newest.model.modelId)}</p><dl><div><dt>収録課題</dt><dd>${completedTasks} / 4</dd></div><div><dt>実動表示</dt><dd>${liveTasks} / 4</dd></div><div><dt>最新実行</dt><dd>${formatDate(newest.execution?.startedAt ?? newest.execution?.endedAt)}</dd></div></dl><strong>4課題をまとめて見る →</strong></a>`;
+    const taskIds = new Set(taskDefinitions.map(({ id }) => id));
+    const taskRuns = items.filter(run => taskIds.has(run.taskId));
+    const completedTasks = new Set(taskRuns.map(run => run.taskId)).size;
+    const visibleTasks = new Set(taskRuns.filter(run => ['live', 'chat'].includes(showcaseKind(run))).map(run => run.taskId)).size;
+    return `<a class="model-card" href="${text(newest.model.pageUrl)}"><p class="model-card-kicker">MODEL</p><h2>${text(newest.model.displayName)}</h2><p>${text(newest.model.modelId)}</p><dl><div><dt>収録課題</dt><dd>${completedTasks} / 4</dd></div><div><dt>結果表示</dt><dd>${visibleTasks} / 4</dd></div><div><dt>最新実行</dt><dd>${formatDate(newest.execution?.startedAt ?? newest.execution?.endedAt)}</dd></div></dl><strong>4課題をまとめて見る →</strong></a>`;
   }).join('') || '<div class="empty">まだモデルの結果がありません。</div>';
 }
 
@@ -244,28 +259,57 @@ function rawSection(name, value) {
 
 function showcaseActions(taskId) {
   return {
-    'color-cascade-18': ['reset', 'runChallenge'],
-    'prism-twist': ['reset', 'scramble', 'play'],
-    'lander-pop': ['reset', 'run'],
-  }[taskId] ?? [];
+    'color-cascade-18': { prepare: ['reset'], run: ['runChallenge'], label: '18連鎖を実行' },
+    'prism-twist': { prepare: ['reset', 'scramble'], run: ['play'], label: 'キューブを解く' },
+    'lander-pop': { prepare: ['reset'], run: ['run'], label: '自動着陸を実行' },
+  }[taskId] ?? null;
 }
 
-function stopShowcase() {
-  if (!activeShowcase) return;
-  const session = activeShowcase;
-  session.cancelled = true;
+function isCurrentShowcase(session) {
+  return !session.cancelled && showcaseSessions.get(session.container) === session;
+}
+
+function releaseShowcaseVisibility(session) {
+  session.visibilityObserver?.disconnect();
+  session.visibilityObserver = null;
+  const resolve = session.visibilityResolve;
+  session.visibilityResolve = null;
+  resolve?.();
+}
+
+function waitForShowcaseVisibility(session) {
+  if (!('IntersectionObserver' in window)) return Promise.resolve();
+  return new Promise(resolve => {
+    session.visibilityResolve = resolve;
+    session.visibilityObserver = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) releaseShowcaseVisibility(session);
+    });
+    session.visibilityObserver.observe(session.visual);
+  });
+}
+
+function releaseShowcaseBridge(session, error) {
   clearTimeout(session.readyTimer);
-  session.readyReject?.(new Error('showcase replay superseded'));
+  releaseShowcaseVisibility(session);
+  if (error) session.readyReject?.(error);
+  session.readyResolve = null;
+  session.readyReject = null;
   for (const pending of session.pending.values()) {
     clearTimeout(pending.timer);
-    pending.reject(new Error('showcase replay superseded'));
+    if (error) pending.reject(error);
   }
   session.pending.clear();
   if (session.onMessage) window.removeEventListener('message', session.onMessage);
+  session.onMessage = null;
+}
+
+function cancelShowcase(session) {
+  if (!session || session.cancelled) return;
+  session.cancelled = true;
+  releaseShowcaseBridge(session, new Error('showcase replay superseded'));
   session.frame.remove();
-  session.button.textContent = '再演する';
-  if (!session.finished) session.status.textContent = '停止しました';
-  activeShowcase = null;
+  if (showcaseSessions.get(session.container) === session) showcaseSessions.delete(session.container);
+  if (activeShowcase === session) activeShowcase = null;
 }
 
 function bindShowcaseButtons(root) {
@@ -278,64 +322,67 @@ function bindShowcaseButtons(root) {
   });
 }
 
-function playShowcase(run, container) {
-  if (activeShowcase?.container === container && !activeShowcase.finished) {
-    stopShowcase();
-    return;
-  }
-  stopShowcase();
-  const url = run.showcase?.url;
-  const expectedPrefix = `./showcases/${encodeURIComponent(run.runId)}/`;
-  if (typeof url !== 'string' || !url.startsWith(expectedPrefix)) {
-    container.querySelector('.showcase-status').textContent = 'ショーケースを読み込めません';
-    return;
-  }
-  const actions = showcaseActions(run.taskId);
-  if (!actions.length) {
-    container.querySelector('.showcase-status').textContent = 'このタスクはライブ非対応';
-    return;
-  }
+function mountShowcase(run, container, mode = 'initial') {
+  const plan = showcaseActions(run.taskId);
+  const visual = container.querySelector('[data-showcase-visual]');
+  const status = container.querySelector('.showcase-status');
+  const button = container.querySelector('.showcase-button');
+  if (!plan || !visual || !status || !button) return null;
+
+  cancelShowcase(showcaseSessions.get(container));
   const frame = document.createElement('iframe');
   frame.className = 'showcase-frame';
   frame.setAttribute('sandbox', 'allow-scripts');
   frame.setAttribute('referrerpolicy', 'no-referrer');
-  frame.title = `${run.taskId} live showcase`;
-  const status = container.querySelector('.showcase-status');
-  const button = container.querySelector('.showcase-button');
-  const session = { frame, button, container, status, cancelled: false, finished: false, nonce: null, pending: new Map(), readyReject: null, onMessage: null };
-  activeShowcase = session;
-  button.textContent = '停止する';
-  status.textContent = '読み込み中…';
+  frame.title = `${run.model?.displayName ?? 'モデル'} ${plan.label}の実動ショーケース`;
+  const session = {
+    run, plan, mode, frame, visual, button, container, status,
+    cancelled: false, finished: false, nonce: null, pending: new Map(), readyReject: null, onMessage: null,
+    visibilityObserver: null, visibilityResolve: null,
+  };
+  showcaseSessions.set(container, session);
+  if (mode === 'execute') activeShowcase = session;
+  button.disabled = true;
+  button.textContent = plan.label;
+  status.textContent = mode === 'execute' ? '準備して実行中…' : '準備中…';
 
-  const send = (action, args = []) => new Promise((resolve, reject) => {
-    if (session.cancelled) {
-      reject(new Error('showcase replay superseded'));
-      return;
-    }
-    const requestId = `showcase-${++requestSerial}`;
-    const timer = setTimeout(() => {
-      session.pending.delete(requestId);
-      reject(new Error(`${action} timeout`));
-    }, 60_000);
-    session.pending.set(requestId, { resolve, reject, timer });
-    frame.contentWindow.postMessage({
-      protocol: 'LIGHTBENCH-1', nonce: session.nonce, taskId: run.taskId, type: 'command', requestId, action, args,
-    }, '*');
-  });
-
-  (async () => {
+  void (async () => {
     try {
-      const response = await fetch(url, { cache: 'no-store' });
+      const url = run.showcase?.url;
+      const expectedPrefix = `./showcases/${encodeURIComponent(run.runId)}/`;
+      if (typeof url !== 'string' || !url.startsWith(expectedPrefix)) throw new Error('ショーケースを読み込めません');
+      const requestedUrl = new URL(url, document.baseURI);
+      if (requestedUrl.origin !== location.origin) throw new Error('ショーケースの配信元が不正です');
+      const response = await fetch(requestedUrl.href, { cache: 'no-store' });
       if (!response.ok) throw new Error(`showcase HTTP ${response.status}`);
+      const responseUrl = new URL(response.url);
+      if (responseUrl.origin !== requestedUrl.origin || responseUrl.pathname !== requestedUrl.pathname) {
+        throw new Error('ショーケースのredirectを拒否しました');
+      }
       const source = await response.text();
-      if (session.cancelled) return;
-      const marker = '__LIGHTBENCH_ASSET_ROOT_9b41c8__';
+      if (!isCurrentShowcase(session)) return;
+      const marker = showcaseMarker;
       if (!source.includes(marker)) throw new Error('showcase security metadata is missing');
-      const assetRoot = new URL('.', new URL(url, document.baseURI)).href;
+      const assetRoot = new URL('.', responseUrl).href;
       const ready = new Promise((resolve, reject) => {
         session.readyResolve = resolve;
         session.readyReject = reject;
         session.readyTimer = setTimeout(() => reject(new Error('bridge timeout')), 8000);
+      });
+      const send = (action, args = []) => new Promise((resolve, reject) => {
+        if (!isCurrentShowcase(session)) {
+          reject(new Error('showcase replay superseded'));
+          return;
+        }
+        const requestId = `showcase-${++requestSerial}`;
+        const timer = setTimeout(() => {
+          session.pending.delete(requestId);
+          reject(new Error(`${action} timeout`));
+        }, 60_000);
+        session.pending.set(requestId, { resolve, reject, timer });
+        frame.contentWindow.postMessage({
+          protocol: 'LIGHTBENCH-1', nonce: session.nonce, taskId: run.taskId, type: 'command', requestId, action, args,
+        }, '*');
       });
       session.onMessage = event => {
         if (event.source !== frame.contentWindow) return;
@@ -344,7 +391,10 @@ function playShowcase(run, container) {
         if (data.type === 'ready' && typeof data.nonce === 'string') {
           session.nonce = data.nonce;
           clearTimeout(session.readyTimer);
-          session.readyResolve();
+          const resolveReady = session.readyResolve;
+          session.readyResolve = null;
+          session.readyReject = null;
+          resolveReady?.();
           return;
         }
         if (data.type !== 'response' || data.nonce !== session.nonce) return;
@@ -356,40 +406,71 @@ function playShowcase(run, container) {
         else pending.reject(new Error(data.error || 'showcase action failed'));
       };
       window.addEventListener('message', session.onMessage);
+      visual.replaceChildren(frame);
       frame.srcdoc = source.replaceAll(marker, assetRoot);
-      container.append(frame);
-      status.textContent = '再生中…';
       await ready;
-      for (const action of actions) {
-        if (session.cancelled) return;
-        await send(action);
+      if (!isCurrentShowcase(session)) return;
+      if (mode === 'initial') await waitForShowcaseVisibility(session);
+      if (!isCurrentShowcase(session)) return;
+      for (const action of plan.prepare) await send(action);
+      if (!isCurrentShowcase(session)) return;
+      if (mode === 'initial') {
+        button.disabled = false;
+        status.textContent = '準備完了';
+        releaseShowcaseBridge(session);
+        return;
       }
-      if (!session.cancelled) {
-        session.finished = true;
-        button.textContent = '再演する';
-        status.textContent = '再生完了';
-      }
+      button.textContent = '停止する';
+      status.textContent = '実行中…';
+      for (const action of plan.run) await send(action);
+      if (!isCurrentShowcase(session)) return;
+      session.finished = true;
+      activeShowcase = null;
+      button.disabled = false;
+      button.textContent = plan.label;
+      status.textContent = '実行完了';
+      releaseShowcaseBridge(session);
     } catch (error) {
-      if (!session.cancelled) {
-        session.finished = true;
-        button.textContent = '再演する';
-        status.textContent = `再生失敗：${error.message}`;
-      }
+      if (!isCurrentShowcase(session)) return;
+      session.finished = true;
+      if (activeShowcase === session) activeShowcase = null;
+      button.disabled = false;
+      button.textContent = plan.label;
+      status.textContent = `再生失敗：${error.message}`;
+      releaseShowcaseBridge(session);
     }
   })();
+  return session;
+}
+
+function stopShowcase() {
+  const session = activeShowcase;
+  if (!session) return;
+  cancelShowcase(session);
+  mountShowcase(session.run, session.container);
+}
+
+function playShowcase(run, container) {
+  const current = showcaseSessions.get(container);
+  if (activeShowcase === current && !current.finished) {
+    stopShowcase();
+    return;
+  }
+  if (activeShowcase) stopShowcase();
+  mountShowcase(run, container, 'execute');
 }
 
 function openDetail(run) {
   if (!run) return;
   const title = `${run.model?.displayName ?? 'モデル'} / ${run.runId}`;
-  detailContent.innerHTML = `<h2 id="detail-title">${text(title)}</h2>${demoMessage(run)}${showcaseMarkup(run)}${evaluationSummary(run)}${artifactGallery(run)}
+  const detailShowcase = showcaseKind(run) === 'chat' ? showcaseMarkup(run, true) : '';
+  detailContent.innerHTML = `<h2 id="detail-title">${text(title)}</h2>${demoMessage(run)}${detailShowcase}${evaluationSummary(run)}${artifactGallery(run)}
     ${detailList([['runId', run.runId], ['cohortId', run.cohortId], ['taskId', run.taskId], ['runKind', run.runKind], ['status', run.status]])}
     <h3>モデル</h3>${detailList(Object.entries(run.model ?? {}).map(([key, value]) => [key, value]))}
     <h3>実行</h3>${detailList(Object.entries(run.execution ?? {}).map(([key, value]) => [key, key.endsWith('At') ? formatDate(value) : key === 'durationMs' ? formatDuration(value) : value]))}
     <h3>使用量</h3>${usageSection('ルート', run.usage?.root)}${usageSection('サブエージェント', run.usage?.subagents)}${usageSection('合計', run.usage?.total)}
     <h3>エージェント</h3>${detailList(Object.entries(run.agents ?? {}).filter(([key]) => key !== 'items').map(([key, value]) => [key, value]))}${run.agents?.items === null ? '<p class="raw">内訳: 取得不能</p>' : (run.agents?.items ?? []).map((item, index) => `<div class="raw agent-item">#${index + 1}\n${escapeHtml(JSON.stringify(item, null, 2))}</div>`).join('') || '<p class="raw">内訳なし</p>'}
     ${rawSection('介入', run.interventions)}${rawSection('バージョン', run.versions)}${rawSection('ハッシュ', run.hashes)}${rawSection('評価', run.evaluation)}`;
-  bindShowcaseButtons(detailContent);
   if (typeof dialog.showModal === 'function') dialog.showModal();
   else dialog.setAttribute('open', '');
 }

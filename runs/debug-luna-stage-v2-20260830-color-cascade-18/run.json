@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-stage-v2-20260830-color-cascade-18",
+  "cohortId": "debug-luna-stage-v2-20260830",
+  "taskId": "color-cascade-18",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-29T18:10:03.018Z",
+    "endedAt": "2026-08-29T18:22:03.018Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720000,
+    "agentSteps": 15,
+    "toolCalls": 11,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "codexHomeIsolation": "auth-only-temporary-home",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720000,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 15,
+        "withinLimit": true
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "PUYO-1.4",
+    "commonPrompt": "CODE-1.3",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1"
+  },
+  "hashes": {
+    "prompt": "a26b56a56c25b0c294d1cd3cea67145d6730469224c873470c041aa18c224af7",
+    "starter": "63b1112de31f5e9d668d8234c9c5e6da9022aa8f1c4b4ed9745498bf697205bc",
+    "candidateSite": "01c76676f4df87e25a0c096c6afc273224c1fdf9de2fe322f756f83fa9e911cc",
+    "evaluator": "7d82f4f6880542ee719b5d9ef399b68ae8578de3ca82545380f7d003df684b07",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。"
+    ],
+    "measurementFailures": [],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "color-cascade-18",
+      "fixture": {
+        "sha256": "9568f9c11c5b511f4be97d42cfc75478fc99e606d28f182e42011badba942968"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "challenge shape: 72 cells, 4 colors, gravity packed",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "reference oracle: exact 18 × 4 and all clear",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "candidate challenge trace equals oracle",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "resolve differential (3 boards)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "dropPair differential (2 cases)",
+          "kind": "logic",
+          "pass": false,
+          "detail": "result did not match the reference"
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": false,
+      "robustnessPass": true,
+      "pass": false
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": false
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

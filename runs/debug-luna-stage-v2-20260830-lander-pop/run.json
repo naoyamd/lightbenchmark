@@ -1,0 +1,289 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-stage-v2-20260830-lander-pop",
+  "cohortId": "debug-luna-stage-v2-20260830",
+  "taskId": "lander-pop",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-29T18:34:53.372Z",
+    "endedAt": "2026-08-29T18:46:53.372Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720000,
+    "agentSteps": 25,
+    "toolCalls": 21,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "codexHomeIsolation": "auth-only-temporary-home",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720000,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 25,
+        "withinLimit": false
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "LANDER-2.0",
+    "commonPrompt": "CODE-1.3",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1"
+  },
+  "hashes": {
+    "prompt": "511d058755433024d4ca162c9ce21aa41a2d586a180c59b8228cbcd55d54b3aa",
+    "starter": "8bcf9787853aace02a93ac9a87a421d74da67a79e5fe8ad403832ccd8afa2698",
+    "candidateSite": "2c6ce57da888350f84d6d863bde183ccab87ac8f3b8aa338c76774d757e123e3",
+    "evaluator": "7d82f4f6880542ee719b5d9ef399b68ae8578de3ca82545380f7d003df684b07",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。",
+      "agentSteps budget exceeded"
+    ],
+    "measurementFailures": [],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "lander-pop",
+      "fixture": {
+        "sha256": "7814c5c68181b4c3e6e1d69c93973d501309bcd201f5ca125a80f2870f0da84c"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "scenario generation (8 seeds)",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "physics differential (180 steps)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "sensor and terminal classifications",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "oracle-sim landing (7/8 required)",
+          "kind": "headline",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": true,
+      "robustnessPass": true,
+      "pass": true,
+      "landings": [
+        {
+          "seed": 1592594996,
+          "status": "landed",
+          "landingTime": 14.259999999999785,
+          "fuel": 0.33867302386514103,
+          "safetyMargin": {
+            "pad": 5.216541809941272,
+            "vx": 1.9321410735402855,
+            "vy": 1.4148055940470627,
+            "theta": 0.13606834696402526,
+            "omega": 0.25600524484556125
+          },
+          "minSafetyMargin": 0.13606834696402526
+        },
+        {
+          "seed": 305419896,
+          "status": "landed",
+          "landingTime": 15.059999999999768,
+          "fuel": 0.33765455029853736,
+          "safetyMargin": {
+            "pad": 4.719208501253204,
+            "vx": 1.4906303575130257,
+            "vy": 1.340461340974623,
+            "theta": 0.13543089267076885,
+            "omega": 0.24970464850567703
+          },
+          "minSafetyMargin": 0.13543089267076885
+        },
+        {
+          "seed": 2596069104,
+          "status": "landed",
+          "landingTime": 15.239999999999764,
+          "fuel": 0.2934146292098144,
+          "safetyMargin": {
+            "pad": 4.466330954803832,
+            "vx": 1.6928951477697884,
+            "vy": 1.0811866388511073,
+            "theta": 0.13476650580916877,
+            "omega": 0.25562729063867784
+          },
+          "minSafetyMargin": 0.13476650580916877
+        },
+        {
+          "seed": 270544960,
+          "status": "off-pad",
+          "landingTime": 13.599999999999799,
+          "fuel": 0.343952786171596,
+          "safetyMargin": {
+            "pad": -7.180448984499002,
+            "vx": -0.14200946509789558,
+            "vy": 1.4906076980928107,
+            "theta": 0.13864073900653595,
+            "omega": 0.25882003277830373
+          },
+          "minSafetyMargin": -7.180448984499002
+        },
+        {
+          "seed": 3735928559,
+          "status": "landed",
+          "landingTime": 14.279999999999784,
+          "fuel": 0.21950699421822015,
+          "safetyMargin": {
+            "pad": 5.924933467781133,
+            "vx": 1.8030074773330487,
+            "vy": 1.4529748975923424,
+            "theta": 0.13668633214619466,
+            "omega": 0.26042705447854114
+          },
+          "minSafetyMargin": 0.13668633214619466
+        },
+        {
+          "seed": 3405691582,
+          "status": "landed",
+          "landingTime": 19.079999999999682,
+          "fuel": 0.388211515027335,
+          "safetyMargin": {
+            "pad": 5.224739322035953,
+            "vx": 1.7536671595580353,
+            "vy": 1.6249124462097957,
+            "theta": 0.13665403977538124,
+            "omega": 0.2617446658685955
+          },
+          "minSafetyMargin": 0.13665403977538124
+        },
+        {
+          "seed": 195948557,
+          "status": "landed",
+          "landingTime": 18.359999999999697,
+          "fuel": 0.2802107429833746,
+          "safetyMargin": {
+            "pad": 4.3042131088747,
+            "vx": 1.7269882141580226,
+            "vy": 1.2991204941235979,
+            "theta": 0.13896726752109878,
+            "omega": 0.25866384406519444
+          },
+          "minSafetyMargin": 0.13896726752109878
+        },
+        {
+          "seed": 4294967295,
+          "status": "landed",
+          "landingTime": 18.139999999999702,
+          "fuel": 0.27574043479183297,
+          "safetyMargin": {
+            "pad": 5.57912950072293,
+            "vx": 1.6381732336871833,
+            "vy": 1.5887543433208455,
+            "theta": 0.13615295795668628,
+            "omega": 0.2590440923201688
+          },
+          "minSafetyMargin": 0.13615295795668628
+        }
+      ]
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": true
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

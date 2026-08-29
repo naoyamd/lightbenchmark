@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cube / 3×3</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #e9eef7;
+      --muted: #91a0b7;
+      --unit: clamp(48px, 16vmin, 84px);
+      --stage-bg: #08101b;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { width: 100%; height: 100%; margin: 0; }
+
+    body {
+      overflow: hidden;
+      background: var(--stage-bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    [data-lightbench-stage] {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      min-height: 360px;
+      overflow: hidden;
+      isolation: isolate;
+      perspective: 1000px;
+      cursor: grab;
+      touch-action: none;
+      background:
+        radial-gradient(ellipse at 50% 43%, rgba(39, 70, 108, .34), transparent 43%),
+        radial-gradient(ellipse at 50% 115%, rgba(22, 38, 65, .55), transparent 52%),
+        linear-gradient(145deg, #0d1725, #050a11 72%);
+    }
+
+    [data-lightbench-stage]::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      opacity: .15;
+      background-image: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(ellipse at center, #000 0%, transparent 72%);
+    }
+
+    .stage-label {
+      position: absolute;
+      top: clamp(20px, 5vh, 48px);
+      left: clamp(20px, 5vw, 68px);
+      letter-spacing: .28em;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      user-select: none;
+    }
+
+    .stage-label::after {
+      content: "";
+      display: inline-block;
+      width: 42px;
+      height: 1px;
+      margin: 0 0 3px 11px;
+      background: #5d718f;
+    }
+
+    .cube-view {
+      position: absolute;
+      top: 51%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      transform-style: preserve-3d;
+      transform: rotateX(var(--view-x, -20deg)) rotateY(var(--view-y, -34deg));
+      transition: transform .25s ease-out;
+    }
+
+    [data-lightbench-stage].dragging .cube-view { transition: none; }
+
+    .cube {
+      position: absolute;
+      width: 0;
+      height: 0;
+      transform-style: preserve-3d;
+    }
+
+    .piece {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      transform-origin: 0 0;
+      transform-style: preserve-3d;
+      transition: transform 150ms cubic-bezier(.2, .75, .25, 1);
+    }
+
+    .cubie {
+      position: absolute;
+      top: calc(var(--unit) * -.5);
+      left: calc(var(--unit) * -.5);
+      width: var(--unit);
+      height: var(--unit);
+      border: 1px solid #020407;
+      border-radius: 9px;
+      background: #030508;
+      box-shadow: 0 0 0 1px #151b25 inset, 0 8px 12px rgba(0,0,0,.25);
+      transform-style: preserve-3d;
+    }
+
+    .sticker {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: calc(var(--unit) - 6px);
+      height: calc(var(--unit) - 6px);
+      border: 1px solid rgba(0,0,0,.58);
+      border-radius: 6px;
+      backface-visibility: hidden;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.4), inset 0 -3px 5px rgba(0,0,0,.23), 0 0 3px rgba(0,0,0,.5);
+      transition: background-color 100ms ease, filter 100ms ease;
+    }
+
+    .sticker[data-face="F"] { transform: translateZ(calc(var(--unit) * .5 + .5px)); }
+    .sticker[data-face="B"] { transform: rotateY(180deg) translateZ(calc(var(--unit) * .5 + .5px)); }
+    .sticker[data-face="R"] { transform: rotateY(90deg) translateZ(calc(var(--unit) * .5 + .5px)); }
+    .sticker[data-face="L"] { transform: rotateY(-90deg) translateZ(calc(var(--unit) * .5 + .5px)); }
+    .sticker[data-face="U"] { transform: rotateX(90deg) translateZ(calc(var(--unit) * .5 + .5px)); }
+    .sticker[data-face="D"] { transform: rotateX(-90deg) translateZ(calc(var(--unit) * .5 + .5px)); }
+
+    .sticker[data-color="0"] { background: linear-gradient(145deg, #fffef5, #d8dfe5); }
+    .sticker[data-color="1"] { background: linear-gradient(145deg, #ef4945, #a90f18); }
+    .sticker[data-color="2"] { background: linear-gradient(145deg, #58d778, #087d4e); }
+    .sticker[data-color="3"] { background: linear-gradient(145deg, #ffe962, #d89b12); }
+    .sticker[data-color="4"] { background: linear-gradient(145deg, #ff9b4f, #bf4b13); }
+    .sticker[data-color="5"] { background: linear-gradient(145deg, #5a9df0, #1854ad); }
+
+    .shadow {
+      position: absolute;
+      top: 67%;
+      left: 50%;
+      width: min(66vmin, 410px);
+      height: min(18vmin, 112px);
+      border-radius: 50%;
+      transform: translate(-50%, -50%) rotate(-7deg);
+      background: rgba(0,0,0,.62);
+      filter: blur(22px);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    .hud {
+      position: absolute;
+      right: clamp(20px, 5vw, 68px);
+      bottom: clamp(20px, 5vh, 48px);
+      display: grid;
+      grid-template-columns: repeat(4, auto);
+      gap: 18px;
+      padding: 11px 14px;
+      border: 1px solid rgba(143, 166, 202, .22);
+      border-radius: 8px;
+      background: rgba(7, 13, 23, .64);
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+      backdrop-filter: blur(8px);
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .readout { min-width: 45px; }
+    .readout small { display: block; margin-bottom: 3px; color: #8191a9; font-size: 8px; letter-spacing: .16em; }
+    .readout strong { display: block; color: #f4f7fb; font-size: 12px; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+    .readout strong[data-state="yes"] { color: #8cf0be; }
+
+    [data-lightbench-stage].complete::after {
+      content: "";
+      position: absolute;
+      inset: 14%;
+      z-index: -1;
+      border: 1px solid rgba(140, 240, 190, .2);
+      border-radius: 50%;
+      box-shadow: 0 0 80px rgba(75, 222, 160, .18), inset 0 0 70px rgba(75, 222, 160, .1);
+      animation: completion-pulse 1.8s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+
+    @keyframes completion-pulse {
+      from { opacity: .35; transform: scale(.96); }
+      to { opacity: .9; transform: scale(1.04); }
+    }
+
+    @media (max-width: 620px) {
+      :root { --unit: clamp(43px, 18vmin, 68px); }
+      .hud { right: 16px; bottom: 16px; gap: 10px; padding: 9px 10px; }
+      .stage-label { left: 18px; }
+      .shadow { top: 65%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .piece, .sticker, .cube-view { transition-duration: 1ms; }
+      [data-lightbench-stage].complete::after { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main data-lightbench-stage aria-label="3×3 Rubik's Cube">
+    <div class="stage-label">PRISM TWIST / 3×3</div>
+    <div class="shadow"></div>
+    <div class="cube-view" aria-hidden="true">
+      <div class="cube" id="cube"></div>
+    </div>
+    <div class="hud" aria-live="polite">
+      <div class="readout"><small>MOVE</small><strong id="hud-move">0</strong></div>
+      <div class="readout"><small>PHASE</small><strong id="hud-phase">READY</strong></div>
+      <div class="readout"><small>SOLVED</small><strong id="hud-solved" data-state="yes">YES</strong></div>
+      <div class="readout"><small>LAST</small><strong id="hud-last">—</strong></div>
+    </div>
+  </main>
+  <script type="module">
+    import {
+      applyMove,
+      createSolved,
+      generateScramble,
+      invertAlgorithm,
+      isSolved,
+    } from "./engine.mjs";
+
+    const stage = document.querySelector("[data-lightbench-stage]");
+    const cube = document.getElementById("cube");
+    const cubeView = document.querySelector(".cube-view");
+    const hudMove = document.getElementById("hud-move");
+    const hudPhase = document.getElementById("hud-phase");
+    const hudSolved = document.getElementById("hud-solved");
+    const hudLast = document.getElementById("hud-last");
+
+    const FACE_INFO = [
+      { name: "U", normal: [0, 1, 0], right: [1, 0, 0], up: [0, 0, -1] },
+      { name: "R", normal: [1, 0, 0], right: [0, 0, -1], up: [0, 1, 0] },
+      { name: "F", normal: [0, 0, 1], right: [1, 0, 0], up: [0, 1, 0] },
+      { name: "D", normal: [0, -1, 0], right: [1, 0, 0], up: [0, 0, 1] },
+      { name: "L", normal: [-1, 0, 0], right: [0, 0, 1], up: [0, 1, 0] },
+      { name: "B", normal: [0, 0, -1], right: [-1, 0, 0], up: [0, 1, 0] },
+    ];
+    const CSS_TURN_ANGLE = { U: 90, R: -90, F: -90, D: -90, L: 90, B: 90 };
+    const MOVE_AXIS = { U: "y", D: "y", R: "x", L: "x", F: "z", B: "z" };
+    const TURN_MS = 165;
+
+    let state = createSolved();
+    let scrambleTokens = [];
+    let eventLog = [];
+    let phase = "READY";
+    let operationVersion = 0;
+    let activeAnimation = null;
+    const pieces = [];
+
+    const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+    const scale = (a, n) => [a[0] * n, a[1] * n, a[2] * n];
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+    function faceletPosition(faceIndex, row, col) {
+      const face = FACE_INFO[faceIndex];
+      return add(face.normal, add(scale(face.right, col - 1), scale(face.up, 1 - row)));
+    }
+
+    function buildCube() {
+      for (let x = -1; x <= 1; x += 1) {
+        for (let y = -1; y <= 1; y += 1) {
+          for (let z = -1; z <= 1; z += 1) {
+            const piece = document.createElement("div");
+            piece.className = "piece";
+            piece.dataset.x = String(x);
+            piece.dataset.y = String(y);
+            piece.dataset.z = String(z);
+            piece.style.setProperty("--px", String(x));
+            piece.style.setProperty("--py", String(-y));
+            piece.style.setProperty("--pz", String(z));
+            piece.style.transform = "translate3d(calc(var(--unit) * var(--px)), calc(var(--unit) * var(--py)), calc(var(--unit) * var(--pz)))";
+
+            const cubie = document.createElement("div");
+            cubie.className = "cubie";
+            for (let faceIndex = 0; faceIndex < 6; faceIndex += 1) {
+              const face = FACE_INFO[faceIndex];
+              if (dot(face.normal, [x, y, z]) !== 1) continue;
+              const sticker = document.createElement("div");
+              sticker.className = "sticker";
+              sticker.dataset.face = face.name;
+              const p = [x, y, z];
+              const col = dot([p[0] - face.normal[0], p[1] - face.normal[1], p[2] - face.normal[2]], face.right) + 1;
+              const row = 1 - dot([p[0] - face.normal[0], p[1] - face.normal[1], p[2] - face.normal[2]], face.up);
+              sticker.dataset.index = String(faceIndex * 9 + row * 3 + col);
+              cubie.appendChild(sticker);
+            }
+            piece.appendChild(cubie);
+            cube.appendChild(piece);
+            pieces.push(piece);
+          }
+        }
+      }
+    }
+
+    function baseTransform(piece) {
+      return "translate3d(calc(var(--unit) * var(--px)), calc(var(--unit) * var(--py)), calc(var(--unit) * var(--pz)))";
+    }
+
+    function render() {
+      for (const piece of pieces) {
+        for (const sticker of piece.querySelectorAll(".sticker")) {
+          sticker.dataset.color = String(state[Number(sticker.dataset.index)]);
+        }
+      }
+      const solved = isSolved(state);
+      hudMove.textContent = String(eventLog.length);
+      hudPhase.textContent = phase;
+      hudSolved.textContent = solved ? "YES" : "NO";
+      hudSolved.dataset.state = solved ? "yes" : "no";
+      hudLast.textContent = eventLog.length ? eventLog[eventLog.length - 1].token : "—";
+      stage.classList.toggle("complete", solved && phase === "SOLVED");
+    }
+
+    function cancelActiveAnimation() {
+      if (activeAnimation) {
+        const cancel = activeAnimation;
+        activeAnimation = null;
+        cancel();
+      }
+      for (const piece of pieces) {
+        piece.style.transition = "none";
+        piece.style.transform = baseTransform(piece);
+      }
+    }
+
+    function cssRotation(token) {
+      const face = token[0];
+      const multiplier = token.endsWith("2") ? 2 : token.endsWith("'") ? -1 : 1;
+      return { axis: MOVE_AXIS[face], angle: CSS_TURN_ANGLE[face] * multiplier };
+    }
+
+    function animateMove(token, version) {
+      const { axis, angle } = cssRotation(token);
+      const selected = pieces.filter((piece) => Number(piece.dataset[axis]) === ("URF".includes(token[0]) ? 1 : -1));
+      const selectedBase = selected.map((piece) => ({ piece, transform: baseTransform(piece) }));
+      selected.forEach(({ piece }) => {
+        piece.style.transition = "none";
+        piece.style.transform = baseTransform(piece);
+      });
+
+      return new Promise((resolve) => {
+        let settled = false;
+        let timer = 0;
+        const finish = (completed) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          if (activeAnimation === cancel) activeAnimation = null;
+          selectedBase.forEach(({ piece, transform }) => {
+            piece.style.transition = "none";
+            piece.style.transform = transform;
+          });
+          resolve(completed && version === operationVersion);
+        };
+        const cancel = () => finish(false);
+        activeAnimation = cancel;
+        window.requestAnimationFrame(() => {
+          if (settled || version !== operationVersion) return finish(false);
+          selected.forEach((piece) => {
+            piece.style.transition = `transform ${TURN_MS}ms cubic-bezier(.2,.75,.25,1)`;
+            piece.style.transform = `rotate${axis.toUpperCase()}(${angle}deg) ${baseTransform(piece)}`;
+          });
+          timer = window.setTimeout(() => finish(true), TURN_MS + 35);
+        });
+      });
+    }
+
+    function recordMove(token, next) {
+      state = next;
+      eventLog.push({
+        seq: eventLog.length + 1,
+        token,
+        state: new Uint8Array(state),
+        solved: isSolved(state),
+      });
+      render();
+    }
+
+    function reset() {
+      operationVersion += 1;
+      cancelActiveAnimation();
+      state = createSolved();
+      scrambleTokens = [];
+      eventLog = [];
+      phase = "READY";
+      render();
+    }
+
+    async function scramble() {
+      operationVersion += 1;
+      const version = operationVersion;
+      cancelActiveAnimation();
+      state = createSolved();
+      scrambleTokens = generateScramble(0x00c0ffee, 25);
+      eventLog = [];
+      phase = "SCRAMBLE";
+      stage.classList.remove("complete");
+      render();
+      for (const token of scrambleTokens) {
+        if (version !== operationVersion) return getSnapshot();
+        recordMove(token, applyMove(state, token));
+      }
+      phase = isSolved(state) ? "READY" : "SCRAMBLED";
+      render();
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      return getSnapshot();
+    }
+
+    async function play() {
+      if (!scrambleTokens.length) await scramble();
+      operationVersion += 1;
+      const version = operationVersion;
+      cancelActiveAnimation();
+      phase = "SOLVING";
+      stage.classList.remove("complete");
+      render();
+      const solution = invertAlgorithm(scrambleTokens);
+      for (const token of solution) {
+        if (version !== operationVersion) return getSnapshot();
+        const animated = await animateMove(token, version);
+        if (!animated || version !== operationVersion) return getSnapshot();
+        recordMove(token, applyMove(state, token));
+      }
+      const solved = isSolved(state);
+      phase = solved ? "SOLVED" : "INCOMPLETE";
+      render();
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      return getSnapshot();
+    }
+
+    function copyLog() {
+      return eventLog.map((entry) => ({
+        seq: entry.seq,
+        token: entry.token,
+        state: new Uint8Array(entry.state),
+        solved: entry.solved,
+      }));
+    }
+
+    function getSnapshot() {
+      return {
+        state: new Uint8Array(state),
+        solved: isSolved(state),
+        phase,
+        move: eventLog.length,
+        scrambleTokens: scrambleTokens.slice(),
+        tokens: scrambleTokens.slice(),
+        logLength: eventLog.length,
+      };
+    }
+
+    async function runChallenge() {
+      reset();
+      await scramble();
+      return play();
+    }
+
+    buildCube();
+    render();
+
+    let dragging = false;
+    let dragX = 0;
+    let dragY = 0;
+    let viewX = -20;
+    let viewY = -34;
+    stage.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      dragX = event.clientX;
+      dragY = event.clientY;
+      stage.classList.add("dragging");
+      stage.setPointerCapture(event.pointerId);
+    });
+    stage.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+      viewY += (event.clientX - dragX) * 0.45;
+      viewX -= (event.clientY - dragY) * 0.45;
+      viewX = Math.max(-80, Math.min(80, viewX));
+      cubeView.style.setProperty("--view-x", `${viewX}deg`);
+      cubeView.style.setProperty("--view-y", `${viewY}deg`);
+      dragX = event.clientX;
+      dragY = event.clientY;
+    });
+    const stopDragging = () => {
+      dragging = false;
+      stage.classList.remove("dragging");
+    };
+    stage.addEventListener("pointerup", stopDragging);
+    stage.addEventListener("pointercancel", stopDragging);
+
+    window.__LIGHTBENCH__ = Object.freeze({
+      reset,
+      scramble,
+      play,
+      run: runChallenge,
+      runChallenge,
+      snapshot: getSnapshot,
+      log: copyLog,
+      getSnapshot,
+      getLog: copyLog,
+    });
+  </script>
+</body>
+</html>
