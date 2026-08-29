@@ -7,7 +7,7 @@ import test from 'node:test';
 import { finalizeDebugRun } from '../scripts/finalize-debug-run.mjs';
 import { buildPromptPayload } from '../scripts/prompt-payload.mjs';
 import { addUsage, responseText, runChat } from '../scripts/run-chat-openai.mjs';
-import { consumeCodexLine, createCandidateWorkspace, emptyCodexStats, runCapturedProcess } from '../scripts/run-codex-task.mjs';
+import { consumeCodexLine, createCandidateWorkspace, createIsolatedCodexHome, emptyCodexStats, runCapturedProcess } from '../scripts/run-codex-task.mjs';
 
 test('raw chat helpers preserve text and sum reported usage', () => {
   const first = { output: [{ content: [{ type: 'output_text', text: 'one' }] }], usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14, input_tokens_details: { cached_tokens: 2 }, output_tokens_details: { reasoning_tokens: 3 } } };
@@ -68,6 +68,30 @@ test('captured processes are stopped by the configured deadline', async () => {
   assert.ok(result.durationMs < 900);
 });
 
+test('captured process timeout does not block while stopping a child tree', async () => {
+  const result = await runCapturedProcess({
+    executable: process.execPath,
+    args: ['-e', `require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000)']); setTimeout(() => {}, 5000)`],
+    cwd: process.cwd(),
+    input: '',
+    timeoutMs: 30,
+  });
+  assert.equal(result.timedOut, true);
+  assert.ok(result.durationMs < 1_000);
+});
+
+test('captured process timeout resolves when an orphan keeps stdout open', async () => {
+  const result = await runCapturedProcess({
+    executable: process.execPath,
+    args: ['-e', `const { spawn } = require('node:child_process'); const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 1500)'], { detached: true, stdio: ['ignore', process.stdout, process.stderr] }); child.unref(); process.exit(0)`],
+    cwd: process.cwd(),
+    input: '',
+    timeoutMs: 30,
+  });
+  assert.equal(result.timedOut, true);
+  assert.equal(result.durationMs, 30);
+});
+
 test('captured processes persist stdout incrementally and parse complete lines', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-stream-'));
   const stdoutFile = path.join(root, 'events.jsonl');
@@ -112,6 +136,24 @@ test('candidate workspace excludes the benchmark repository', async () => {
   }
 });
 
+test('isolated Codex home carries authentication but no user instructions or skills', async () => {
+  const source = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-codex-source-'));
+  let isolated;
+  try {
+    await Promise.all([
+      writeFile(path.join(source, 'auth.json'), '{"token":"test"}'),
+      writeFile(path.join(source, 'AGENTS.md'), 'personal instructions'),
+      mkdir(path.join(source, 'skills')),
+    ]);
+    isolated = await createIsolatedCodexHome(source);
+    assert.deepEqual(await readdir(isolated), ['auth.json']);
+    assert.equal(await readFile(path.join(isolated, 'auth.json'), 'utf8'), '{"token":"test"}');
+  } finally {
+    if (isolated) await rm(isolated, { recursive: true, force: true });
+    await rm(source, { recursive: true, force: true });
+  }
+});
+
 test('debug finalizer creates an append-only live showcase record', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-finalize-'));
   const cohort = path.join(root, 'cohort');
@@ -128,7 +170,7 @@ test('debug finalizer creates an append-only live showcase record', async () => 
       writeFile(path.join(workspace, 'public-tests.mjs'), '// fixture'),
       writeFile(path.join(workspace, 'payload.json'), JSON.stringify(payload)),
       writeFile(path.join(cohort, 'commitment.json'), JSON.stringify({ prompts: { 'prism-twist': promptHash } })),
-      writeFile(path.join(workspace, 'codex-events.jsonl'), `${JSON.stringify({ type: 'item.completed', item: { type: 'command_execution', command: 'Get-Content C:\\\\repo\\\\evaluator\\\\cube.mjs' } })}\n${JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } })}\n`),
+      writeFile(path.join(workspace, 'codex-events.jsonl'), `${JSON.stringify({ type: 'item.completed', item: { type: 'command_execution', command: 'Get-Content C:\\\\repo\\\\evaluator\\\\cube.mjs; Get-Content C:\\\\Users\\\\test\\\\.codex\\\\skills\\\\demo\\\\SKILL.md' } })}\n${JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } })}\n`),
       writeFile(path.join(workspace, 'codex-run.json'), JSON.stringify({
         schemaVersion: 1,
         harness: 'codex-cli-agent',
@@ -160,7 +202,9 @@ test('debug finalizer creates an append-only live showcase record', async () => 
     assert.equal(result.run.execution.terminationReason, 'finalized-incomplete');
     assert.equal(result.run.execution.toolCalls, 1);
     assert.deepEqual(result.run.execution.benchmarkRepositoryExposure, ['independent evaluator source']);
+    assert.deepEqual(result.run.execution.externalContextExposure, ['user skill instructions']);
     assert.match(result.run.evaluation.comparabilityBlockers.join('\n'), /benchmark非公開ファイル/u);
+    assert.match(result.run.evaluation.comparabilityBlockers.join('\n'), /ユーザー文脈/u);
     assert.equal((await readFile(path.join(result.target, 'run.json'), 'utf8')).includes('LIGHTBENCH-1'), true);
     await assert.rejects(() => finalizeDebugRun({ workspace, workRoot: root, runsDir, runId: 'debug-test-prism-twist', cohortId: 'debug-test' }), /already exists/u);
   } finally {

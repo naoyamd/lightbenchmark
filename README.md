@@ -3,8 +3,8 @@
 LightBenchmarkは、小規模なAIモデルを「見て面白い」「成功・失敗が一目で分かる」4課題で比較する静的ベンチマークです。
 
 - 閉本の日本語チャットと、公式情報を渡した後の訂正
-- 18連鎖して全消しするColor Cascade
-- 実回転で完成する3D twisty puzzle
+- 18連鎖して全消しする、丸い色ぷよの落ちものゲーム
+- 標準6色の3×3ルービックキューブ
 - 観測値から自動制御する垂直着陸toy simulation
 
 単一の総合点は作りません。課題達成、ロジック、未知入力への頑健性、見やすさ、token・費用・時間・サブエージェント使用量を別々に公開します。
@@ -31,7 +31,7 @@ npm run build
 npm run prompt -- prism-twist
 ```
 
-生成された`dist/`を任意の静的serverで開けます。
+生成された`dist/`を任意の静的serverで開けます。トップはモデル一覧で、各モデルの専用ページに4課題を固定順で掲載します。
 
 ```powershell
 npm run dev
@@ -83,7 +83,7 @@ npm run evaluate -- prism-twist C:\isolated\submission\site C:\sealed\fixture.js
 
 ## 権利・安全
 
-公開名とvisualはgenericな独自作品とし、既存ゲーム、企業、ロケットの名称・logo・画像・音声を使いません。Lander Popは教育用toy simulationであり、実機制御用途ではありません。
+課題として認識できる定番の盤面・配色・操作は必須ですが、公式logo、既存ゲームの画像・音声・固有キャラクターは使いません。Lander Popは教育用toy simulationであり、実機制御用途ではありません。
 
 ## License
 

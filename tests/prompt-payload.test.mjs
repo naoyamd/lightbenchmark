@@ -9,21 +9,21 @@ import { benchmarkTaskIds, buildPromptPayload } from "../scripts/prompt-payload.
 const promptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../prompts");
 const publicV1 = {
   "color-cascade-18": {
-    version: "PUYO-1.1",
-    file: "color-cascade-18-v1.1.md",
-    sha256: "6e9db167eddc91124b1beaeb363eb433d9ded863c9dd1e7c8b6bd12ac6c6f906",
-    previousSha256: "c14fc0dac0acfb124fd8fd7726f30a317f23c2a7ab61a022d15f200201d23f5d",
+    version: "PUYO-1.3",
+    file: "color-cascade-18-v1.3.md",
+    sha256: "b2d15fec460842455ad7701f0f71bd76ad04601a7839eb31073df55cea5008a1",
+    previousSha256: "f58978d575ee6138415240762b9626e5e21f52b9ae0b94ae4f66a4d8a2f256cd",
   },
   "prism-twist": {
-    version: "CUBE-1.1",
-    file: "prism-twist-v1.1.md",
-    sha256: "5d921ddfeba34dd68da0bc022e4a5092c6e55c79d82ec5557bb80322250b1e31",
-    previousSha256: "92b3fe4e70a0618e8b452c075ae2d49db4a1438667292ee98fbe5a8eabd7f9ac",
+    version: "CUBE-1.2",
+    file: "prism-twist-v1.2.md",
+    sha256: "ee91a37c6bd6ea988cfaa8fb355b10b9a428b4746e2b0b63536a3013ce95fa47",
+    previousSha256: "5d921ddfeba34dd68da0bc022e4a5092c6e55c79d82ec5557bb80322250b1e31",
   },
   "lander-pop": {
     version: "LANDER-1.1",
     file: "lander-pop-v1.1.md",
-    sha256: "672fd156970b7932f2f774086d0a6a2f0aa933e10589665109e3fc317354d6b0",
+    sha256: "2d109525e2cff601e97358927fcb16a55942f3895244f4916e22c65bfab17bd0",
     previousSha256: "63b1fffad49bccfb904d3cedb08005dd643e8a9b32fdf8a337f3ac3f5aa62d0d",
   },
 };
@@ -43,15 +43,16 @@ test("all four frozen tasks produce ready-to-send message payloads", async () =>
     ))));
   }
   assert.equal((await buildPromptPayload("japanese-chat")).sequence.length, 2);
-  assert.match((await buildPromptPayload("prism-twist")).sequence[0].messages[0].content, /隔離workspace[\s\S]*Prism Twist/);
+  assert.match((await buildPromptPayload("color-cascade-18")).sequence[0].messages[0].content, /完成盤面の探索は今回の評価対象ではありません[\s\S]*\[\[2,1,1,2,1,1\]/);
+  assert.match((await buildPromptPayload("prism-twist")).sequence[0].messages[0].content, /隔離workspace[\s\S]*3×3 ルービックキューブ/);
 });
 
-test("coding public-v1 payloads use v1.1 filenames and changed hashes", async () => {
+test("coding public-v1 payloads use the frozen filenames and changed hashes", async () => {
   const index = JSON.parse(await readFile(path.join(promptsDir, "index.json"), "utf8"));
   const commonEntry = index.prompts.find((prompt) => prompt.taskId === "common-coding");
   assert.deepEqual(commonEntry && { version: commonEntry.version, file: commonEntry.file }, {
-    version: "CODE-1.1",
-    file: "common-coding-v1.1.md",
+    version: "CODE-1.2",
+    file: "common-coding-v1.2.md",
   });
   for (const [taskId, expected] of Object.entries(publicV1)) {
     const entry = index.prompts.find((prompt) => prompt.taskId === taskId);
@@ -61,7 +62,7 @@ test("coding public-v1 payloads use v1.1 filenames and changed hashes", async ()
     });
     const payload = await buildPromptPayload(taskId, promptsDir);
     assert.equal(payload.promptVersion, expected.version);
-    assert.equal(payload.commonVersion, "CODE-1.1");
+    assert.equal(payload.commonVersion, "CODE-1.2");
     assert.equal(sequenceHash(payload), expected.sha256);
     assert.notEqual(sequenceHash(payload), expected.previousSha256);
   }

@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-visual-v12-20260830-prism-twist-external-eval",
+  "cohortId": "debug-luna-visual-v12-20260830",
+  "taskId": "prism-twist",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-29T16:29:50.139Z",
+    "endedAt": "2026-08-29T16:41:50.724Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720585,
+    "agentSteps": 21,
+    "toolCalls": 16,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720585,
+        "withinLimit": false
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 21,
+        "withinLimit": true
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [],
+  "showcase": null,
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "CUBE-1.2",
+    "commonPrompt": "CODE-1.1",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1"
+  },
+  "hashes": {
+    "prompt": "6cc316566b29dcca9847bd75c43fa33b28ae738c3f93df3e15d943e61153ce05",
+    "starter": "47594be9b6c6d9ceeb03f08ddf89eb14a62c1107d970a8f7782db740ca311f4a",
+    "candidateSite": null,
+    "evaluator": "9b7597f8d036aee2d73ca4d1b4ba30b7b8632b877d6d35a501932e99a19422b5",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": false,
+      "reason": "許可外ファイルです: preview.png"
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。",
+      "wallClock budget exceeded"
+    ],
+    "measurementFailures": [],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "prism-twist",
+      "fixture": {
+        "sha256": "92e04547018c07d72a471f0bb90ab440b7b937760425459b2bdab8db7da0f7c7"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "solved representation",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "deterministic scramble (3 seeds)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "move states equal oracle (5 algorithms)",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "scramble is solved only through inverse moves",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "invalid algorithm is atomic",
+          "kind": "logic",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": true,
+      "robustnessPass": true,
+      "pass": true
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": true
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

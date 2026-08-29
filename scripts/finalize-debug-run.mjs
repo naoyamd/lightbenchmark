@@ -17,6 +17,10 @@ const sensitiveRepositoryPatterns = [
   ['evaluation harness', /(?:^|[\\/])scripts[\\/]+evaluate-submission\.mjs/iu],
   ['benchmark test suite', /(?:^|[\\/])tests[\\/]+[^"'\s]+\.test\.mjs/iu],
 ];
+const externalContextPatterns = [
+  ['global AGENTS.md', /(?:^|[\\/])\.codex[\\/]+AGENTS(?:\.override)?\.md/iu],
+  ['user skill instructions', /(?:^|[\\/])\.codex[\\/]+skills[\\/]+[^"'\s]+SKILL\.md/iu],
+];
 
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const fileHash = async file => sha256(await readFile(file));
@@ -126,6 +130,9 @@ async function buildEvaluation(taskId, workspace, runner, showcaseState) {
   if (runner.sensitiveRepositoryReads?.length) {
     common.comparabilityBlockers.push(`候補がbenchmark非公開ファイルを参照しました: ${runner.sensitiveRepositoryReads.join(', ')}`);
   }
+  if (runner.externalContextReads?.length) {
+    common.comparabilityBlockers.push(`候補が比較条件外のユーザー文脈を参照しました: ${runner.externalContextReads.join(', ')}`);
+  }
 
   if (taskId === 'japanese-chat') {
     const firstFile = path.join(workspace, 'turn1-response.txt');
@@ -170,11 +177,15 @@ async function recoverRunner(workspace, taskId, recorded) {
     const eventFile = path.join(workspace, 'codex-events.jsonl');
     const stats = emptyCodexStats();
     let sensitiveRepositoryReads = [];
+    let externalContextReads = [];
     eventInfo = await regularFile(eventFile);
     if (eventInfo) {
       const events = await readFile(eventFile, 'utf8');
       for (const line of events.split(/\r?\n/u)) consumeCodexLine(stats, line);
       sensitiveRepositoryReads = sensitiveRepositoryPatterns
+        .filter(([, pattern]) => pattern.test(events))
+        .map(([label]) => label);
+      externalContextReads = externalContextPatterns
         .filter(([, pattern]) => pattern.test(events))
         .map(([label]) => label);
     }
@@ -187,6 +198,7 @@ async function recoverRunner(workspace, taskId, recorded) {
       usage: recorded.usage ?? stats.usage,
       malformedLines: Math.max(recorded.malformedLines ?? 0, stats.malformedLines),
       sensitiveRepositoryReads,
+      externalContextReads,
     };
     const stderr = await readFile(path.join(workspace, 'codex-stderr.log'), 'utf8').catch(() => '');
     recovered.commandPolicyBlocks = (stderr.match(/rejected: blocked by policy/gu) ?? []).length;
@@ -308,10 +320,12 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
         toolCalls: taskId === 'japanese-chat' ? 0 : runner.toolCalls ?? null,
         commandPolicyBlocks: taskId === 'japanese-chat' ? 0 : runner.commandPolicyBlocks ?? 0,
         benchmarkRepositoryExposure: taskId === 'japanese-chat' ? [] : runner.sensitiveRepositoryReads ?? [],
+        externalContextExposure: taskId === 'japanese-chat' ? [] : runner.externalContextReads ?? [],
         terminationReason: runner.terminationReason ?? 'unknown',
         lane: 'autonomous',
         harness: runner.cliVersion ? `${runner.harness} ${runner.cliVersion}` : runner.harness,
         isolation: runner.isolation,
+        codexHomeIsolation: runner.codexHomeIsolation ?? null,
         limits,
       },
       usage,

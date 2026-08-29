@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { finished } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,17 @@ export async function createCandidateWorkspace(source) {
   try {
     await mkdir(path.join(target, 'submission', 'site'), { recursive: true });
     await Promise.all(['prompt.txt', 'public-tests.mjs'].map(file => cp(path.join(source, file), path.join(target, file))));
+    return target;
+  } catch (error) {
+    await rm(target, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+export async function createIsolatedCodexHome(source = process.env.CODEX_HOME || path.join(homedir(), '.codex')) {
+  const target = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-codex-home-'));
+  try {
+    await cp(path.join(source, 'auth.json'), path.join(target, 'auth.json'), { errorOnExist: true, force: false });
     return target;
   } catch (error) {
     await rm(target, { recursive: true, force: true });
@@ -51,27 +62,54 @@ export function consumeCodexLine(stats, line) {
 function terminateProcessTree(child) {
   if (!child.pid) return;
   if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+    const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+    const fallback = setTimeout(() => {
+      child.kill();
+      killer.kill();
+    }, 5_000);
+    killer.once('error', () => child.kill());
+    killer.once('close', () => clearTimeout(fallback));
     return;
   }
   try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
 }
 
-export function runCapturedProcess({ executable, args, cwd, input, timeoutMs, stdoutFile, stderrFile, onStdoutLine, startedAt = new Date() }) {
+export function runCapturedProcess({ executable, args, cwd, input, timeoutMs, stdoutFile, stderrFile, onStdoutLine, startedAt = new Date(), env = process.env }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, detached: process.platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(executable, args, { cwd, env, detached: process.platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     const stdoutSink = stdoutFile ? createWriteStream(stdoutFile, { flags: 'a' }) : null;
     const stderrSink = stderrFile ? createWriteStream(stderrFile, { flags: 'a' }) : null;
     let stdout = stdoutFile ? null : '';
     let stderr = '';
     let lineBuffer = '';
     let timedOut = false;
+    let settled = false;
+    let forcedClose;
+    const deadline = new Date(startedAt.getTime() + timeoutMs);
+    const settle = async (exitCode, signal, endedAt = new Date()) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(forcedClose);
+      if (lineBuffer) onStdoutLine?.(lineBuffer);
+      child.stdout.destroy();
+      child.stderr.destroy();
+      stdoutSink?.end();
+      stderrSink?.end();
+      const sinkError = await Promise.all([stdoutSink && finished(stdoutSink), stderrSink && finished(stderrSink)].filter(Boolean)).then(() => null, error => error);
+      if (sinkError) reject(sinkError);
+      else resolve({ startedAt, endedAt, durationMs: endedAt - startedAt, exitCode, signal, timedOut, stdout, stderr });
+    };
     const timer = setTimeout(() => {
       timedOut = true;
       terminateProcessTree(child);
+      // A detached grandchild can inherit stdout and keep Node's `close` event pending forever.
+      forcedClose = setTimeout(() => settle(null, 'deadline', deadline), 1_000);
     }, timeoutMs);
     child.once('error', error => {
       clearTimeout(timer);
+      clearTimeout(forcedClose);
+      settled = true;
       stdoutSink?.destroy();
       stderrSink?.destroy();
       reject(error);
@@ -91,15 +129,7 @@ export function runCapturedProcess({ executable, args, cwd, input, timeoutMs, st
       stderr = `${stderr}${chunk}`.slice(-65_536);
       stderrSink?.write(chunk);
     });
-    child.once('close', async (exitCode, signal) => {
-      clearTimeout(timer);
-      if (lineBuffer) onStdoutLine?.(lineBuffer);
-      stdoutSink?.end();
-      stderrSink?.end();
-      await Promise.all([stdoutSink && finished(stdoutSink), stderrSink && finished(stderrSink)].filter(Boolean)).catch(reject);
-      const endedAt = new Date();
-      resolve({ startedAt, endedAt, durationMs: endedAt - startedAt, exitCode, signal, timedOut, stdout, stderr });
-    });
+    child.once('close', (exitCode, signal) => settle(exitCode, signal, timedOut ? deadline : new Date()));
     child.stdin.end(input);
   });
 }
@@ -146,6 +176,7 @@ export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort =
     execPolicy: 'controlled rules ignored; on-request with auto-review',
     networkEnforcement: 'requested-disabled; not independently verified',
     candidateWorkspaceIsolation: 'repo-external-temporary-copy',
+    codexHomeIsolation: 'auth-only-temporary-home',
     startedAt: startedAt.toISOString(),
     endedAt: null,
     durationMs: null,
@@ -160,8 +191,10 @@ export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort =
   let result;
   let processError;
   let candidateRoot;
+  let isolatedCodexHome;
   try {
     candidateRoot = await createCandidateWorkspace(root);
+    isolatedCodexHome = await createIsolatedCodexHome();
     const args = [
       'exec', ...isolationFlags, ...disabledFeatures.flatMap(feature => ['--disable', feature]), '--json', '--model', model,
       '-c', `model_reasoning_effort="${effort}"`,
@@ -176,6 +209,7 @@ export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort =
     result = await runCapturedProcess({
       executable, args, cwd: candidateRoot, input: prompt, timeoutMs, stdoutFile: eventFile, stderrFile,
       onStdoutLine: line => consumeCodexLine(stats, line), startedAt,
+      env: { ...process.env, CODEX_HOME: isolatedCodexHome },
     });
   } catch (error) {
     processError = error;
@@ -186,6 +220,7 @@ export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort =
     processError ??= error;
   } finally {
     if (candidateRoot) await rm(candidateRoot, { recursive: true, force: true });
+    if (isolatedCodexHome) await rm(isolatedCodexHome, { recursive: true, force: true });
   }
   if (processError) {
     const endedAt = new Date();

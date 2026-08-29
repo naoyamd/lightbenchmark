@@ -22,7 +22,7 @@ subagentの`spawned`だけをrunnerが確実に観測できたdebug runでは、
 
 statusは`pass`、`partial`、`candidate-fail`、`infra-error`、`inconclusive`のいずれか。実行laneは`autonomous`または`assisted`とする。正式runでは時刻とdurationを必須とし、相互差は1秒以内に一致させる。Coding課題の`execution.isolation`は`isolated-candidate-workspace`として、候補へbenchmark repository、oracle、参照実装、過去出力を読ませない。閉本chatは`tools-disabled-api`とする。ローカルrepoと同じhostで走らせたagent試行は`same-host-debug`であり、debug runだけに使える。debug runだけは計測欠落を`null`で公開できる。
 
-ローカルCodex debug runnerも候補をrepo外の使い捨てdirectoryで実行し、prompt、公開test、提出先以外をstageしない。JSONLに評価器、評価harness、非公開testへの参照痕跡があれば`execution.benchmarkRepositoryExposure`へ記録し、必ずcomparability blockerにする。この措置は誤露出を防ぐためのもので、同一host runを正式隔離へ昇格させるものではない。
+ローカルCodex debug runnerも候補をrepo外の使い捨てdirectoryと、認証情報だけを持つ一時`CODEX_HOME`で実行し、prompt、公開test、提出先以外をstageしない。JSONLに評価器、評価harness、非公開testへの参照痕跡があれば`execution.benchmarkRepositoryExposure`へ、global AGENTSやユーザーskillへの参照痕跡があれば`execution.externalContextExposure`へ記録し、必ずcomparability blockerにする。この措置は誤露出を防ぐためのもので、同一host runを正式隔離へ昇格させるものではない。
 
 公開galleryの動画・画像はrun directoryからの相対pathだけを使用する。絶対URL、`..`、symlink、実体のないfile、種別と拡張子の不一致は公開buildで拒否する。
 

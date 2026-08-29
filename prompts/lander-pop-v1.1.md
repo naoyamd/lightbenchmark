@@ -2,7 +2,7 @@
 
 Prompt version: `LANDER-1.1`
 
-`common-coding-v1.1.md`の本文へ次を連結する。
+`common-coding-v1.2.md`の本文へ次を連結する。
 
 ```text
 課題: Lander Pop

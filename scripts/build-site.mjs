@@ -741,6 +741,38 @@ function parseCli(args) {
   return values;
 }
 
+function modelSlug(modelId) {
+  const slug = modelId.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!slug) fail(`model.${modelId}`, 'modelId cannot produce an empty page path');
+  return slug;
+}
+
+function htmlText(value) {
+  return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+}
+
+async function writeModelPages(runs, distDir) {
+  const shell = await readFile(path.join(distDir, 'index.html'), 'utf8');
+  const models = new Map();
+  for (const run of runs) {
+    if (run.demo === true || run.isDemo === true) continue;
+    const id = run.model.modelId;
+    const slug = modelSlug(id);
+    if (models.has(slug) && models.get(slug).modelId !== id) fail(`model.${id}`, `page path conflicts with ${models.get(slug).modelId}`);
+    models.set(slug, run.model);
+    run.model.pageUrl = `./models/${slug}/`;
+  }
+  for (const [slug, model] of models) {
+    const page = shell
+      .replace('<head>', '<head>\n    <base href="../../">')
+      .replace(/<title>[^<]*<\/title>/, `<title>${htmlText(model.displayName)} | LightBenchmark</title>`)
+      .replace('<body>', `<body data-model-id="${htmlText(model.modelId)}">`);
+    const target = path.join(distDir, 'models', slug);
+    await mkdir(target, { recursive: true });
+    await writeFile(path.join(target, 'index.html'), page, 'utf8');
+  }
+}
+
 /** Build the static site and deterministic data/runs.json. */
 export async function buildSite(options = {}) {
   const root = path.resolve(options.rootDir ?? projectRoot);
@@ -774,6 +806,7 @@ export async function buildSite(options = {}) {
   await copyPrompts(promptsDir, path.join(distDir, 'prompts'));
   await copyRunArtifacts(runEntries, distDir);
   await copyShowcases(preparedShowcases, distDir);
+  await writeModelPages(runs, distDir);
   const dataDir = path.join(distDir, 'data');
   const outputFile = path.join(dataDir, 'runs.json');
   await mkdir(dataDir, { recursive: true });

@@ -1,13 +1,20 @@
 const results = document.querySelector('#results');
-const taskFilter = document.querySelector('#task-filter');
-const statusFilter = document.querySelector('#status-filter');
-const resultCount = document.querySelector('#result-count');
+const pageTitle = document.querySelector('#page-title');
+const pageLede = document.querySelector('#page-lede');
+const pageNav = document.querySelector('#page-nav');
 const dialog = document.querySelector('#detail-dialog');
 const detailContent = document.querySelector('#detail-content');
 const closeButton = document.querySelector('#dialog-close');
 let runs = [];
 let activeShowcase = null;
 let requestSerial = 0;
+
+const taskDefinitions = [
+  { id: 'japanese-chat', number: '01', title: '日本語チャット', summary: '閉本で答え、資料を読んだ後に自分の誤りを訂正する。' },
+  { id: 'color-cascade-18', number: '02', title: 'ぷよぷよ風・18連鎖全消し', summary: '丸い色ぷよが落ちる6列盤で、実ロジックによる18連鎖と全消しを再演する。', visualVersion: 'PUYO-1.3' },
+  { id: 'prism-twist', number: '03', title: '3×3 ルービックキューブ', summary: '標準6色・黒い境界の3×3キューブを、実際の面回転だけで揃える。', visualVersion: 'CUBE-1.2' },
+  { id: 'lander-pop', number: '04', title: 'ロケット垂直着陸', summary: '同じ初期条件から自動制御し、着陸・墜落・転倒までそのまま見せる。' },
+];
 
 const labels = {
   runId: 'Run ID', cohortId: 'コホート', taskId: 'タスク', runKind: '区分', status: 'ステータス',
@@ -21,6 +28,9 @@ const labels = {
   lane: '実行レーン',
   harness: '実行ハーネス',
   isolation: '実行隔離',
+  codexHomeIsolation: 'Codexホーム隔離',
+  externalContextExposure: '外部ユーザー文脈への接触',
+  benchmarkRepositoryExposure: '非公開ベンチマークへの接触',
   showcase: 'ショーケース',
 };
 
@@ -119,56 +129,99 @@ function metric(labelText, value) {
   return `<div class="metric"><dt>${escapeHtml(labelText)}</dt><dd>${text(value)}</dd></div>`;
 }
 
-function choices(values, placeholder) {
-  return `<option value="">${placeholder}</option>${values.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}`;
+function runTime(run) {
+  return Date.parse(run.execution?.startedAt ?? run.execution?.endedAt ?? '') || 0;
 }
 
-function populateFilters() {
-  const tasks = [...new Set(runs.map(run => run.taskId).filter(value => value !== null))].sort();
-  const statuses = [...new Set(runs.map(run => run.status).filter(value => value !== null))].sort();
-  taskFilter.innerHTML = choices(tasks, 'すべてのタスク');
-  statusFilter.innerHTML = choices(statuses, 'すべてのステータス');
+function sortedNewest(items) {
+  return [...items].sort((first, second) => runTime(second) - runTime(first) || String(second.runId).localeCompare(String(first.runId)));
 }
 
-function renderCards() {
-  const task = taskFilter.value;
-  const status = statusFilter.value;
-  const filtered = runs
-    .filter(run => (!task || run.taskId === task) && (!status || run.status === status))
-    .sort((first, second) => {
-      const rank = run => run.demo === true || run.isDemo === true ? 0 : run.evaluation == null ? 2 : 1;
-      return rank(first) - rank(second) || String(first.runId).localeCompare(String(second.runId));
-    });
-  resultCount.textContent = `${filtered.length} 件`;
-  if (!filtered.length) {
-    results.innerHTML = '<div class="empty"><strong>まだ結果がないみたい。</strong><br>フィルターをゆるめるか、新しい run を追加してみてね。</div>';
-    return;
+function statusBadge(run) {
+  if (run.demo === true || run.isDemo === true) return '<span class="badge demo-badge">DEMO</span>';
+  if (run.runKind === 'debug') return '<span class="badge debug-badge">DEBUG · INCONCLUSIVE</span>';
+  return `<span class="badge">${text(run.status)}</span>`;
+}
+
+function visualContract(definition, run) {
+  if (!definition.visualVersion) return '';
+  const actual = run.versions?.prompt;
+  if (actual !== definition.visualVersion) {
+    return `<p class="visual-contract visual-contract-old"><strong>旧ビジュアル契約のrun</strong> · ${text(actual)}。抽象的な宝石・記号表現を許していたため、現在の「見慣れた見た目」評価には採用しません。</p>`;
   }
-  results.innerHTML = filtered.map(run => {
-    const total = run.usage?.total;
-    const demo = run.demo === true || run.isDemo === true;
-    const debug = run.runKind === 'debug';
-    const badge = demo ? '<span class="badge demo-badge">DEMO</span>'
-        : debug ? '<span class="badge debug-badge">DEBUG · INCONCLUSIVE</span>'
-        : `<span class="badge">${text(run.status)}</span>`;
-    return `<article class="card">
-      ${demoMessage(run)}
-      ${showcaseMarkup(run, true)}
-      ${evaluationSummary(run)}
-      <div class="card-head"><div><h2>${text(run.model?.displayName)}</h2><p class="provider">${text(run.model?.provider)} · ${text(run.model?.modelId)}</p></div>${badge}</div>
-      <p class="task-line">${text(run.taskId)} · ${formatDate(run.execution?.startedAt ?? run.execution?.endedAt)}</p>
-      ${artifactGallery(run, true)}
-      <dl class="metrics">
-        ${metric('合計トークン', formatNumber(total?.totalTokens))}
-        ${metric('サブエージェント', formatNumber(run.agents?.spawned))}
-        ${metric('実行時間', formatDuration(run.execution?.durationMs))}
-        ${metric('コスト', formatCost(total))}
-      </dl>
-      <button class="detail-button" type="button" data-run-index="${runs.indexOf(run)}">全内訳を見る →</button>
-    </article>`;
-  }).join('');
+  return '<p class="visual-contract"><strong>視覚評価対象</strong> · 再演して、課題名から想像する見た目と操作になっているかを確認できます。</p>';
+}
+
+function previousAttempts(items, primary) {
+  const previous = sortedNewest(items).filter(run => run !== primary);
+  if (!previous.length) return '';
+  return `<details class="attempts"><summary>以前の試行 ${previous.length}件</summary><ul>${previous.map(run => `<li><span>${formatDate(run.execution?.startedAt ?? run.execution?.endedAt)} · ${text(run.versions?.prompt)} · ${text(run.status)}</span><button type="button" data-run-index="${runs.indexOf(run)}">記録</button></li>`).join('')}</ul></details>`;
+}
+
+function taskResult(definition, modelRuns) {
+  const attempts = modelRuns.filter(run => run.taskId === definition.id);
+  const run = sortedNewest(attempts)[0];
+  const promptLabel = run && definition.visualVersion && run.versions?.prompt !== definition.visualVersion ? '修正版prompt' : '完成版prompt';
+  if (!run) {
+    return `<article class="task-result" id="task-${definition.id}"><header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><a href="./prompts/${definition.id}.prompt.html">完成版prompt ↗</a></header><p class="showcase-empty">このモデルの実行結果はまだありません。</p></article>`;
+  }
+  const total = run.usage?.total;
+  return `<article class="task-result" id="task-${definition.id}">
+    <header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><a href="./prompts/${definition.id}.prompt.html">${promptLabel} ↗</a></header>
+    ${visualContract(definition, run)}
+    ${showcaseMarkup(run)}
+    ${evaluationSummary(run)}
+    ${artifactGallery(run)}
+    <div class="run-head"><div><strong>${text(run.model?.displayName)}</strong><span>${text(run.model?.modelId)}</span></div>${statusBadge(run)}</div>
+    <dl class="metrics">
+      ${metric('合計トークン', formatNumber(total?.totalTokens))}
+      ${metric('サブエージェント', formatNumber(run.agents?.spawned))}
+      ${metric('実行日時', formatDate(run.execution?.startedAt ?? run.execution?.endedAt))}
+      ${metric('実行時間', formatDuration(run.execution?.durationMs))}
+    </dl>
+    <div class="record-actions"><span>run: ${text(run.runId)}</span><button class="detail-button" type="button" data-run-index="${runs.indexOf(run)}">usage・ハッシュ・評価記録</button></div>
+    ${previousAttempts(attempts, run)}
+  </article>`;
+}
+
+function bindResultActions() {
   results.querySelectorAll('[data-run-index]').forEach(button => button.addEventListener('click', () => openDetail(runs[Number(button.dataset.runIndex)])));
   bindShowcaseButtons(results);
+}
+
+function renderModelPage(modelId) {
+  const modelRuns = runs.filter(run => run.model?.modelId === modelId && run.demo !== true && run.isDemo !== true);
+  if (!modelRuns.length) {
+    results.innerHTML = `<div class="error">モデル「${text(modelId)}」の結果が見つかりません。</div>`;
+    return;
+  }
+  const model = sortedNewest(modelRuns)[0].model;
+  document.body.classList.add('model-page');
+  pageNav.hidden = false;
+  pageTitle.innerHTML = `${text(model.displayName)}<span>の4課題。</span>`;
+  pageLede.textContent = `${model.modelId} の生成物を、同じページで上から順に再演できます。成功演出ではなく独立評価の記録を判定に使います。`;
+  results.className = 'model-results';
+  results.innerHTML = taskDefinitions.map(definition => taskResult(definition, modelRuns)).join('');
+  bindResultActions();
+}
+
+function renderModelIndex() {
+  const models = new Map();
+  for (const run of runs) {
+    if (run.demo === true || run.isDemo === true || !run.model?.modelId) continue;
+    if (!models.has(run.model.modelId)) models.set(run.model.modelId, []);
+    models.get(run.model.modelId).push(run);
+  }
+  const entries = [...models.values()].sort((first, second) => String(first[0].model.displayName).localeCompare(String(second[0].model.displayName)));
+  pageTitle.innerHTML = 'モデルごとに、<span>4つの実演。</span>';
+  pageLede.textContent = 'カードを選ぶと、そのモデルの日本語・ぷよぷよ風ゲーム・3×3キューブ・ロケット着陸を1ページで追えます。';
+  results.className = 'model-index';
+  results.innerHTML = entries.map(items => {
+    const newest = sortedNewest(items)[0];
+    const completedTasks = new Set(items.map(run => run.taskId)).size;
+    const liveTasks = new Set(items.filter(run => run.showcase).map(run => run.taskId)).size;
+    return `<a class="model-card" href="${text(newest.model.pageUrl)}"><p class="model-card-kicker">MODEL</p><h2>${text(newest.model.displayName)}</h2><p>${text(newest.model.modelId)}</p><dl><div><dt>収録課題</dt><dd>${completedTasks} / 4</dd></div><div><dt>実動表示</dt><dd>${liveTasks} / 4</dd></div><div><dt>最新実行</dt><dd>${formatDate(newest.execution?.startedAt ?? newest.execution?.endedAt)}</dd></div></dl><strong>4課題をまとめて見る →</strong></a>`;
+  }).join('') || '<div class="empty">まだモデルの結果がありません。</div>';
 }
 
 function detailList(entries) {
@@ -278,7 +331,7 @@ function playShowcase(run, container) {
       if (session.cancelled) return;
       const marker = '__LIGHTBENCH_ASSET_ROOT_9b41c8__';
       if (!source.includes(marker)) throw new Error('showcase security metadata is missing');
-      const assetRoot = new URL('.', new URL(url, location.href)).href;
+      const assetRoot = new URL('.', new URL(url, document.baseURI)).href;
       const ready = new Promise((resolve, reject) => {
         session.readyResolve = resolve;
         session.readyReject = reject;
@@ -341,8 +394,6 @@ function openDetail(run) {
   else dialog.setAttribute('open', '');
 }
 
-taskFilter.addEventListener('change', renderCards);
-statusFilter.addEventListener('change', renderCards);
 closeButton.addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 
@@ -351,10 +402,10 @@ fetch('./data/runs.json')
   .then(data => {
     if (!Array.isArray(data)) throw new Error('runs.json must contain an array');
     runs = data;
-    populateFilters();
-    renderCards();
+    const modelId = document.body.dataset.modelId;
+    if (modelId) renderModelPage(modelId);
+    else renderModelIndex();
   })
   .catch(error => {
-    resultCount.textContent = '';
     results.innerHTML = `<div class="error">結果を読み込めませんでした。<br><small>${text(error.message)}</small></div>`;
   });

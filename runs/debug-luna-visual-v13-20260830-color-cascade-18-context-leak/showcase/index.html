@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101329">
+  <title>ぷよリレー — Color Cascade</title>
+  <style>
+    :root {
+      --ink: #f7f7ff;
+      --muted: #a8aaca;
+      --soft: #73789e;
+      --panel: rgba(25, 28, 57, .76);
+      --line: rgba(255, 255, 255, .12);
+      --pink: #ff6cab;
+      --cyan: #63e9ee;
+      --yellow: #ffd866;
+      --purple: #9c83ff;
+      --cell-size: min(4.85vw, 38px);
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1024;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 14% 5%, rgba(255, 108, 171, .15), transparent 27rem),
+        radial-gradient(circle at 85% 20%, rgba(99, 233, 238, .12), transparent 25rem),
+        linear-gradient(145deg, #11142e 0%, #0d1024 55%, #171034 100%);
+      letter-spacing: .015em;
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      content: "";
+      opacity: .22;
+      background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 38px 38px;
+      mask-image: linear-gradient(to bottom, black, transparent 80%);
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .app-shell {
+      position: relative;
+      z-index: 1;
+      width: min(1180px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 22px 0 28px;
+    }
+
+    .topbar, .stage-head, .panel-head, .metric-row, .speed-row, .mode-tabs, .key-row {
+      display: flex;
+      align-items: center;
+    }
+
+    .topbar {
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 68px;
+      margin-bottom: 24px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand h1 { margin: 2px 0 0; font-size: clamp(1.35rem, 2.4vw, 1.9rem); letter-spacing: -.04em; }
+    .eyebrow, .kicker, .metric-label, .tiny-label, .field-caption, .button-label {
+      font-size: .66rem;
+      font-weight: 800;
+      letter-spacing: .19em;
+      text-transform: uppercase;
+    }
+    .eyebrow { color: var(--cyan); }
+    .brand-mark {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(2, 17px);
+      gap: 3px;
+      transform: rotate(-7deg);
+    }
+    .brand-mark span, .spark-dot { display: block; width: 17px; height: 17px; border-radius: 50%; box-shadow: inset -3px -4px 0 rgba(40, 25, 86, .24), inset 3px 3px 0 rgba(255,255,255,.28); }
+    .brand-mark span:nth-child(1) { background: #ff6cab; }
+    .brand-mark span:nth-child(2) { background: #ffd866; }
+    .brand-mark span:nth-child(3) { background: #63e9ee; }
+    .brand-mark span:nth-child(4) { background: #9c83ff; }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .75rem;
+      white-space: nowrap;
+    }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 14px var(--cyan); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .stage, .control-panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: 0 25px 80px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255,255,255,.055);
+      backdrop-filter: blur(18px);
+    }
+
+    .stage {
+      min-height: 704px;
+      padding: 26px 26px 23px;
+      border-radius: 28px;
+      overflow: hidden;
+    }
+    .control-panel { border-radius: 24px; padding: 20px; }
+
+    .stage-head { justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+    .kicker { margin: 0 0 7px; color: var(--pink); }
+    .stage h2 { margin: 0; font-size: clamp(1.28rem, 2.6vw, 2rem); letter-spacing: -.045em; }
+    .stage-subtitle { margin: 8px 0 0; color: var(--muted); font-size: .82rem; }
+
+    .action-button, .ghost-button, .tab-button {
+      border: 0;
+      color: var(--ink);
+      transition: transform .18s ease, background .18s ease, border-color .18s ease, opacity .18s ease;
+    }
+    .action-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 43px;
+      padding: 0 16px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, #ff6cab, #c379ff);
+      box-shadow: 0 10px 23px rgba(255, 108, 171, .2);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+    .action-button:hover:not(:disabled), .ghost-button:hover:not(:disabled), .tab-button:hover:not(:disabled) { transform: translateY(-2px); }
+    .action-button:disabled { cursor: wait; opacity: .55; }
+    .action-button .play-icon { font-size: 1.05rem; line-height: 1; }
+    .ghost-button {
+      min-height: 38px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size: .73rem;
+      font-weight: 700;
+    }
+
+    .play-zone {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) minmax(155px, 215px);
+      align-items: center;
+      justify-content: center;
+      gap: clamp(18px, 4vw, 58px);
+      min-height: 580px;
+      padding: 16px clamp(10px, 3vw, 42px) 20px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(4, 6, 25, .32), rgba(52, 37, 93, .19));
+      border: 1px solid rgba(255,255,255,.06);
+    }
+
+    .board-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .field-caption { display: flex; justify-content: space-between; width: calc(var(--cell-size) * 6 + 10px); color: var(--soft); }
+    .field-caption .floor-line { color: var(--cyan); }
+    .board-frame {
+      position: relative;
+      padding: 7px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 17px;
+      background: linear-gradient(145deg, rgba(35, 40, 80, .95), rgba(14, 17, 42, .96));
+      box-shadow: 0 22px 44px rgba(0,0,0,.36), 0 0 0 5px rgba(255,255,255,.025), inset 0 1px 0 rgba(255,255,255,.1);
+    }
+    .board-frame::after {
+      position: absolute;
+      inset: 11px;
+      z-index: -1;
+      content: "";
+      border-radius: 13px;
+      background: rgba(99, 233, 238, .17);
+      filter: blur(22px);
+    }
+    .board {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(6, var(--cell-size));
+      grid-template-rows: repeat(14, var(--cell-size));
+      gap: 1px;
+      width: calc(var(--cell-size) * 6 + 5px);
+      height: calc(var(--cell-size) * 14 + 13px);
+      overflow: hidden;
+      border-radius: 11px;
+      background: rgba(7, 9, 28, .82);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), inset 0 0 30px rgba(0,0,0,.4);
+    }
+    .cell { position: relative; min-width: 0; min-height: 0; }
+    .cell::before {
+      position: absolute;
+      inset: 4px;
+      content: "";
+      border-radius: 8px;
+      background: rgba(255,255,255,.014);
+    }
+    .puyo {
+      position: absolute;
+      inset: -1px;
+      z-index: 1;
+      display: block;
+      overflow: hidden;
+      border-radius: 50%;
+      background: var(--puyo-color);
+      box-shadow: inset -4px -6px 0 var(--puyo-shadow), inset 4px 4px 0 rgba(255,255,255,.28), 0 2px 4px rgba(0,0,0,.22);
+    }
+    .puyo::after {
+      position: absolute;
+      top: 16%;
+      left: 22%;
+      width: 27%;
+      height: 16%;
+      content: "";
+      border-radius: 50%;
+      background: rgba(255,255,255,.6);
+      filter: blur(1px);
+      transform: rotate(-25deg);
+    }
+    .puyo[data-color="1"] { --puyo-color: #ff6d8e; --puyo-shadow: #c93c70; }
+    .puyo[data-color="2"] { --puyo-color: #ffd768; --puyo-shadow: #d59f39; }
+    .puyo[data-color="3"] { --puyo-color: #64e6dc; --puyo-shadow: #299eaa; }
+    .puyo[data-color="4"] { --puyo-color: #a386ff; --puyo-shadow: #664ec6; }
+    .puyo-pattern { position: absolute; inset: 19%; border-radius: 50%; opacity: .38; }
+    .puyo[data-color="1"] .puyo-pattern { background: radial-gradient(circle, #fff 0 12%, transparent 14%) 0 0 / 48% 48%; }
+    .puyo[data-color="2"] .puyo-pattern { background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(74,37,80,.58) 5px 7px, transparent 8px 12px); }
+    .puyo[data-color="3"] .puyo-pattern { border: 3px solid rgba(10,78,104,.62); transform: rotate(45deg); }
+    .puyo[data-color="4"] .puyo-pattern { background: conic-gradient(from 45deg, rgba(68,39,139,.64) 0 12%, transparent 12% 25%, rgba(68,39,139,.64) 25% 38%, transparent 38% 50%, rgba(68,39,139,.64) 50% 62%, transparent 62% 75%, rgba(68,39,139,.64) 75% 88%, transparent 88%); }
+    .puyo-face { position: absolute; inset: 37% 21% 21%; z-index: 2; }
+    .eye { position: absolute; top: 0; width: 21%; height: 31%; border-radius: 50%; background: #292044; box-shadow: inset 1px 1px 0 rgba(255,255,255,.8); }
+    .eye:first-child { left: 20%; }
+    .eye:last-child { right: 20%; }
+    .mouth { position: absolute; left: 38%; bottom: 12%; width: 24%; height: 18%; border-bottom: 2px solid #292044; border-radius: 0 0 50% 50%; }
+    .puyo.is-active { outline: 2px solid rgba(255,255,255,.88); outline-offset: -2px; filter: saturate(1.15) brightness(1.1); }
+    .puyo.is-clearing { animation: clear-pop .42s cubic-bezier(.2,.85,.24,1) both; }
+    .puyo.is-clearing .puyo-face { animation: face-wobble .16s ease-in-out infinite alternate; }
+    .board.is-settling .puyo { animation: settle-drop .3s cubic-bezier(.23,.87,.37,1.05) both; }
+    .board.is-settling .puyo:nth-child(3n) { animation-delay: .035s; }
+    .board.is-settling .puyo:nth-child(4n) { animation-delay: .07s; }
+
+    @keyframes clear-pop { 0% { transform: scale(1) rotate(0); opacity: 1; } 50% { transform: scale(1.13) rotate(-8deg); filter: brightness(1.5); } 100% { transform: scale(.05) rotate(25deg); opacity: .05; } }
+    @keyframes face-wobble { from { transform: translateX(-2px) rotate(-4deg); } to { transform: translateX(2px) rotate(4deg); } }
+    @keyframes settle-drop { from { transform: translateY(-9px); opacity: .65; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes pulse-ring { 0%, 100% { transform: scale(.94); opacity: .7; } 50% { transform: scale(1.04); opacity: 1; } }
+    @keyframes twinkle { 0%, 100% { opacity: .3; transform: scale(.7); } 50% { opacity: 1; transform: scale(1.2); } }
+
+    .replay-rail { align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 18px; min-width: 0; }
+    .rail-card { padding: 15px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.035); }
+    .rail-card strong { display: block; margin-top: 6px; font-size: 1rem; letter-spacing: -.03em; }
+    .rail-card p { margin: 6px 0 0; color: var(--muted); font-size: .74rem; line-height: 1.55; }
+    .progress-track { height: 7px; margin-top: 12px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.08); }
+    .progress-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--purple), var(--pink)); box-shadow: 0 0 12px rgba(99,233,238,.5); transition: width .25s ease; }
+    .sparkles { position: relative; display: flex; justify-content: space-between; margin: 0 3px 2px; }
+    .spark-dot { width: 7px; height: 7px; background: var(--yellow); box-shadow: 0 0 11px var(--yellow); animation: twinkle 1.4s ease-in-out infinite; }
+    .spark-dot:nth-child(2) { background: var(--pink); animation-delay: .25s; }
+    .spark-dot:nth-child(3) { background: var(--cyan); animation-delay: .5s; }
+
+    .panel-head { justify-content: space-between; margin-bottom: 16px; }
+    .panel-head h3 { margin: 0; font-size: .92rem; }
+    .panel-head span { color: var(--soft); font-size: .68rem; font-weight: 700; }
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .metric-card { padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.035); }
+    .metric-label { display: block; color: var(--soft); }
+    .metric-value { display: block; margin-top: 4px; font-size: 2.15rem; font-weight: 850; line-height: 1; letter-spacing: -.09em; }
+    .metric-value.cyan { color: var(--cyan); text-shadow: 0 0 20px rgba(99,233,238,.3); }
+    .metric-value.pink { color: var(--pink); text-shadow: 0 0 20px rgba(255,108,171,.3); }
+    .metric-note { display: block; margin-top: 8px; color: var(--muted); font-size: .67rem; }
+
+    .clear-card { position: relative; display: flex; align-items: center; gap: 13px; min-height: 68px; margin-bottom: 12px; padding: 13px 15px; overflow: hidden; border: 1px solid rgba(99,233,238,.24); border-radius: 17px; background: linear-gradient(120deg, rgba(99,233,238,.1), rgba(156,131,255,.08)); }
+    .clear-card::after { position: absolute; inset: 0; content: ""; border-radius: inherit; box-shadow: inset 0 0 22px rgba(99,233,238,.07); pointer-events: none; }
+    .clear-card.is-solved { border-color: rgba(255,216,102,.52); background: linear-gradient(120deg, rgba(255,216,102,.17), rgba(255,108,171,.12)); animation: pulse-ring 1.5s ease-in-out infinite; }
+    .clear-icon { flex: 0 0 auto; display: grid; place-items: center; width: 39px; height: 39px; border-radius: 13px; background: rgba(99,233,238,.15); color: var(--cyan); font-size: 1.35rem; }
+    .clear-card.is-solved .clear-icon { background: rgba(255,216,102,.18); color: var(--yellow); }
+    .clear-title { display: block; font-size: .93rem; font-weight: 850; letter-spacing: -.02em; }
+    .clear-subtitle { display: block; margin-top: 3px; color: var(--muted); font-size: .68rem; }
+
+    .section-block { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 11px; }
+    .section-title h4 { margin: 0; font-size: .75rem; }
+    .section-title span { color: var(--soft); font-size: .66rem; }
+    .pair-preview { display: flex; align-items: center; gap: 0; min-height: 58px; padding: 7px 13px; }
+    .pair-preview .puyo { position: relative; inset: auto; width: 39px; height: 39px; flex: 0 0 39px; }
+    .pair-preview .puyo + .puyo { margin-left: -6px; transform: translateY(9px); }
+    .pair-preview .puyo:first-child { z-index: 2; }
+    .pair-preview .puyo + .puyo .puyo-face { transform: translateY(-1px); }
+    .pair-box { display: flex; align-items: center; min-height: 72px; border: 1px solid var(--line); border-radius: 16px; background: rgba(0,0,0,.13); }
+    .pair-note { margin-left: auto; padding-right: 13px; color: var(--soft); font-size: .67rem; line-height: 1.35; text-align: right; }
+    .pair-note b { display: block; color: var(--ink); font-size: .72rem; }
+
+    .mode-tabs { gap: 5px; padding: 4px; border: 1px solid var(--line); border-radius: 13px; background: rgba(0,0,0,.13); }
+    .tab-button { flex: 1; min-height: 34px; border-radius: 9px; background: transparent; color: var(--soft); font-size: .68rem; font-weight: 800; }
+    .tab-button.is-active { background: rgba(255,255,255,.11); color: var(--ink); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+    .manual-help { display: none; margin-top: 12px; color: var(--muted); font-size: .71rem; line-height: 1.6; }
+    .manual-help.is-visible { display: block; }
+    .key-row { justify-content: space-between; margin-top: 9px; color: var(--soft); font-size: .66rem; }
+    kbd { min-width: 25px; padding: 3px 5px; border: 1px solid rgba(255,255,255,.16); border-bottom-width: 2px; border-radius: 5px; color: var(--ink); background: rgba(255,255,255,.07); font-size: .64rem; text-align: center; }
+
+    .speed-row { justify-content: space-between; gap: 12px; margin-top: 11px; color: var(--muted); font-size: .71rem; }
+    .speed-row output { min-width: 39px; color: var(--cyan); text-align: right; font-weight: 800; }
+    input[type="range"] { width: 100%; accent-color: var(--pink); }
+    .toggle-row { display: flex; align-items: center; gap: 9px; margin-top: 13px; color: var(--muted); font-size: .71rem; }
+    .toggle-row input { accent-color: var(--cyan); }
+
+    .footer-note { display: flex; justify-content: space-between; gap: 16px; margin-top: 15px; color: var(--soft); font-size: .66rem; }
+    .footer-note span:last-child { color: var(--cyan); }
+
+    body.motion-off *, body.motion-off *::before, body.motion-off *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 900px) {
+      :root { --cell-size: min(7.2vw, 34px); }
+      .layout { grid-template-columns: 1fr; }
+      .stage { min-height: 0; }
+      .control-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; align-items: start; }
+      .control-panel > .panel-head, .control-panel > .mode-tabs, .control-panel > .section-block:last-child { grid-column: 1 / -1; }
+      .metric-grid { margin: 0; }
+      .clear-card { margin: 0; }
+    }
+    @media (max-width: 620px) {
+      .app-shell { width: min(100% - 20px, 500px); padding-top: 12px; }
+      .topbar { margin-bottom: 14px; }
+      .header-status { display: none; }
+      .stage { padding: 18px 12px 14px; border-radius: 21px; }
+      .stage-head { align-items: flex-start; }
+      .stage-head .action-button { padding: 0 11px; font-size: .66rem; }
+      .stage-subtitle { font-size: .72rem; }
+      .play-zone { grid-template-columns: 1fr; gap: 15px; min-height: 0; padding: 14px 7px 16px; }
+      .replay-rail { display: grid; grid-template-columns: 1fr 1fr; width: min(100%, 330px); }
+      .rail-card { padding: 11px; }
+      .rail-card strong { font-size: .82rem; }
+      .rail-card p { font-size: .65rem; }
+      .control-panel { display: block; padding: 14px; border-radius: 19px; }
+      .metric-grid { margin-bottom: 12px; }
+      .footer-note { display: block; line-height: 1.7; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <div>
+          <div class="eyebrow">COLOR CASCADE / PLAYGROUND</div>
+          <h1>ぷよリレー</h1>
+        </div>
+      </div>
+      <div class="header-status"><span class="live-dot" aria-hidden="true"></span><span id="headerStatus">CHALLENGE READY</span></div>
+    </header>
+
+    <main class="layout">
+      <section class="stage" aria-labelledby="stageTitle">
+        <div class="stage-head">
+          <div>
+            <p class="kicker">CHALLENGE MODE · PUBLIC-V1</p>
+            <h2 id="stageTitle">18連鎖、ぜんぶ消す。</h2>
+            <p class="stage-subtitle">つながる色ぷよが、次の波を呼ぶ。最後の一粒まで見届けてね ✦</p>
+          </div>
+          <button class="action-button" id="runButton" type="button"><span class="play-icon">▶</span><span id="runButtonText">REPLAY</span></button>
+        </div>
+
+        <div class="play-zone">
+          <div class="board-wrap">
+            <div class="field-caption"><span>6 × 14 FIELD</span><span class="floor-line">FLOOR ↓</span></div>
+            <div class="board-frame">
+              <div class="board" id="board" role="grid" aria-label="ぷよぷよ風の6列14行フィールド"></div>
+            </div>
+          </div>
+
+          <div class="replay-rail" aria-live="polite">
+            <div class="rail-card">
+              <div class="sparkles" aria-hidden="true"><span class="spark-dot"></span><span class="spark-dot"></span><span class="spark-dot"></span></div>
+              <span class="tiny-label">WAVE PROGRESS</span>
+              <strong id="waveLabel">WAVE 00 / —</strong>
+              <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="progressFill"></div></div>
+            </div>
+            <div class="rail-card">
+              <span class="tiny-label">LAST CLEAR</span>
+              <strong id="railClear">— cells</strong>
+              <p id="railHint">REPLAYを押すと、実際の盤面が連鎖していくよ。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="control-panel" aria-label="ゲーム情報と操作">
+        <div class="panel-head"><h3>RUN CONSOLE</h3><span id="modeBadge">CHALLENGE</span></div>
+
+        <div class="metric-grid">
+          <div class="metric-card"><span class="metric-label">CHAIN</span><strong class="metric-value cyan" id="chainMetric">00</strong><span class="metric-note" id="chainNote">waiting for cascade</span></div>
+          <div class="metric-card"><span class="metric-label">CLEAR</span><strong class="metric-value pink" id="clearMetric">00</strong><span class="metric-note">cells in this wave</span></div>
+        </div>
+
+        <div class="clear-card" id="clearCard">
+          <div class="clear-icon" id="clearIcon" aria-hidden="true">✦</div>
+          <div><strong class="clear-title" id="clearTitle">READY TO CASCADE</strong><span class="clear-subtitle" id="clearSubtitle">実盤面を読み込み中…</span></div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title"><h4>MODE SELECT</h4><span>pick your vibe</span></div>
+          <div class="mode-tabs" role="tablist" aria-label="モード選択">
+            <button class="tab-button is-active" id="challengeTab" role="tab" aria-selected="true" type="button">CHALLENGE</button>
+            <button class="tab-button" id="manualTab" role="tab" aria-selected="false" type="button">MANUAL</button>
+          </div>
+          <div class="manual-help" id="manualHelp">左右で移動、↑で回転、↓で落下。<br>Space / DROP で一気にロックするよ。</div>
+          <div class="key-row" id="keyRow"><span>← → MOVE</span><span>↑ TURN</span><span>↓ DROP</span></div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title"><h4 id="pairTitle">NEXT 2 PUYO</h4><span>soft &amp; squishy</span></div>
+          <div class="pair-box"><div class="pair-preview" id="pairPreview" aria-label="次の2個"></div><div class="pair-note" id="pairNote"><b>LOCKED ROUTE</b>18 wave puzzle</div></div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title"><h4>REPLAY SPEED</h4><span id="speedValue">1.0×</span></div>
+          <div class="speed-row"><span>chill</span><input id="speedRange" type="range" min="0.5" max="2" step="0.1" value="1" aria-label="リプレイ速度"><span>zoom</span></div>
+          <label class="toggle-row"><input id="motionToggle" type="checkbox" checked> clear / drop animation</label>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="footer-note"><span>色＋模様＋表情で見分けられる、オリジナルぷよ。</span><span id="footerStatus">ENGINE ONLINE · LOCAL ONLY</span></footer>
+  </div>
+
+  <script type="module">
+    import { RULES, dropPair, resolve } from "./engine.mjs";
+
+    const $ = (selector) => document.querySelector(selector);
+    const boardEl = $("#board");
+    const runButton = $("#runButton");
+    const runButtonText = $("#runButtonText");
+    const challengeTab = $("#challengeTab");
+    const manualTab = $("#manualTab");
+    const manualHelp = $("#manualHelp");
+    const keyRow = $("#keyRow");
+    const pairPreview = $("#pairPreview");
+    const motionToggle = $("#motionToggle");
+    const speedRange = $("#speedRange");
+    const speedValue = $("#speedValue");
+
+    const emptyBoard = () => Array.from({ length: RULES.height }, () => Array(RULES.width).fill(0));
+    const copyBoard = (board) => board.map((row) => row.slice());
+    const copyValue = (value) => {
+      if (Array.isArray(value)) return value.map(copyValue);
+      if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, copyValue(item)]));
+      return value;
+    };
+    const isEmpty = (board) => board.every((row) => row.every((cell) => cell === 0));
+    const keyFor = (x, y) => `${x},${y}`;
+    const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+    const manualPairs = [[1, 3], [4, 2], [2, 1], [3, 4], [1, 2], [4, 3], [2, 4], [3, 1]];
+
+    const state = {
+      mode: "challenge",
+      challengeBoard: null,
+      board: emptyBoard(),
+      challengeResult: null,
+      currentChain: 0,
+      chainCount: 0,
+      lastCleared: [],
+      stepIndex: 0,
+      totalSteps: 0,
+      running: false,
+      visualClearing: [],
+      settling: false,
+      active: null,
+      nextColors: [4, 2],
+      manualIndex: 0,
+      eventLog: [],
+      generation: 0,
+      runPromise: null,
+      motionOverride: null,
+      loadError: "",
+    };
+
+    const pending = new Set();
+
+    function record(event) {
+      state.eventLog.push(copyValue(event));
+    }
+
+    function cancelPending() {
+      for (const entry of [...pending]) {
+        if (entry.kind === "timer") clearTimeout(entry.id);
+        if (entry.kind === "interval") clearInterval(entry.id);
+        if (entry.kind === "frame") cancelAnimationFrame(entry.id);
+        pending.delete(entry);
+        entry.resolve(false);
+      }
+    }
+
+    function cancelVisualAnimations() {
+      for (const element of document.querySelectorAll("*")) {
+        if (typeof element.getAnimations !== "function") continue;
+        for (const animation of element.getAnimations()) animation.cancel();
+      }
+    }
+
+    function wait(ms, token) {
+      return new Promise((resolveWait) => {
+        const entry = { kind: "timer", id: 0, resolve: resolveWait };
+        entry.id = setTimeout(() => {
+          pending.delete(entry);
+          resolveWait(token === state.generation);
+        }, ms);
+        pending.add(entry);
+      });
+    }
+
+    function nextPaint(token) {
+      return new Promise((resolveWait) => {
+        const entry = { kind: "frame", id: 0, resolve: resolveWait };
+        entry.id = requestAnimationFrame(() => {
+          pending.delete(entry);
+          resolveWait(token === state.generation);
+        });
+        pending.add(entry);
+      });
+    }
+
+    function motionEnabled() {
+      return state.motionOverride === null ? motionToggle.checked : state.motionOverride;
+    }
+
+    function derivedSolved() {
+      return state.mode === "challenge"
+        && !state.running
+        && state.challengeResult !== null
+        && state.stepIndex === state.challengeResult.steps.length
+        && state.chainCount === state.challengeResult.chainCount
+        && isEmpty(state.board)
+        && state.eventLog.some((event) => event.type === "complete");
+    }
+
+    function derivedLanded() {
+      return state.eventLog.some((event) => event.type === "settled" || event.type === "manual-lock");
+    }
+
+    function derivedStatus() {
+      if (state.loadError) return "ERROR";
+      if (!state.challengeBoard) return "LOADING";
+      if (state.running) return "REPLAYING";
+      if (derivedSolved()) return "ALL CLEAR";
+      return state.mode === "manual" ? "MANUAL READY" : "READY";
+    }
+
+    function snapshot() {
+      return copyValue({
+        mode: state.mode,
+        status: derivedStatus(),
+        board: state.board,
+        chainCount: state.chainCount,
+        currentChain: state.currentChain,
+        cleared: state.lastCleared,
+        stepIndex: state.stepIndex,
+        totalSteps: state.totalSteps,
+        solved: derivedSolved(),
+        landed: derivedLanded(),
+        running: state.running,
+        activePair: state.active,
+        nextPair: { colors: state.nextColors.slice() },
+        events: state.eventLog,
+      });
+    }
+
+    function makePuyo(color, active = false) {
+      const puyo = document.createElement("span");
+      puyo.className = `puyo${active ? " is-active" : ""}`;
+      puyo.dataset.color = String(color);
+      puyo.setAttribute("aria-label", `color ${color}`);
+      const pattern = document.createElement("span");
+      pattern.className = "puyo-pattern";
+      const face = document.createElement("span");
+      face.className = "puyo-face";
+      face.innerHTML = '<i class="eye"></i><i class="eye"></i><i class="mouth"></i>';
+      puyo.append(pattern, face);
+      return puyo;
+    }
+
+    function activeCells() {
+      if (!state.active) return [];
+      const [dx, dy] = directions[state.active.rotation];
+      return [
+        { x: state.active.x, y: state.active.y, color: state.active.colors[0] },
+        { x: state.active.x + dx, y: state.active.y + dy, color: state.active.colors[1] },
+      ];
+    }
+
+    function renderBoard() {
+      const active = new Map(activeCells().map((cell) => [keyFor(cell.x, cell.y), cell]));
+      const clearing = new Set(state.visualClearing.map(([x, y]) => keyFor(x, y)));
+      boardEl.classList.toggle("is-settling", state.settling);
+      boardEl.innerHTML = "";
+
+      for (let y = RULES.height - 1; y >= 0; y -= 1) {
+        for (let x = 0; x < RULES.width; x += 1) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.setAttribute("role", "gridcell");
+          const key = keyFor(x, y);
+          const activeCell = active.get(key);
+          const color = activeCell?.color || state.board[y][x];
+          if (color) {
+            const puyo = makePuyo(color, Boolean(activeCell));
+            if (clearing.has(key) && !activeCell) puyo.classList.add("is-clearing");
+            cell.appendChild(puyo);
+          }
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+
+    function renderPair(colors) {
+      pairPreview.innerHTML = "";
+      for (const color of colors) pairPreview.appendChild(makePuyo(color));
+    }
+
+    function render() {
+      const solved = derivedSolved();
+      const status = derivedStatus();
+      renderBoard();
+      $("#headerStatus").textContent = `${state.mode === "manual" ? "MANUAL" : "CHALLENGE"} · ${status}`;
+      $("#footerStatus").textContent = solved ? "ENGINE ONLINE · ALL CLEAR VERIFIED" : "ENGINE ONLINE · LOCAL ONLY";
+      $("#modeBadge").textContent = state.mode === "manual" ? "MANUAL" : "CHALLENGE";
+      $("#chainMetric").textContent = String(state.currentChain).padStart(2, "0");
+      $("#clearMetric").textContent = String(state.lastCleared.length).padStart(2, "0");
+      $("#chainNote").textContent = state.totalSteps ? `${state.stepIndex} / ${state.totalSteps} waves settled` : "waiting for cascade";
+      $("#waveLabel").textContent = `WAVE ${String(state.currentChain).padStart(2, "0")} / ${state.totalSteps || "—"}`;
+      $("#progressFill").style.width = `${state.totalSteps ? (state.stepIndex / state.totalSteps) * 100 : 0}%`;
+      $("#railClear").textContent = `${state.lastCleared.length || "—"} cells`;
+      $("#railHint").textContent = solved ? "盤面が空になった。ALL CLEAR ✨" : state.running ? "消えて、落ちて、またつながる…" : "REPLAYを押すと、実際の盤面が連鎖していくよ。";
+      $("#clearTitle").textContent = solved ? "全消し / ALL CLEAR" : state.running ? `CHAIN ${state.currentChain} · CASCADE` : state.mode === "manual" ? "MANUAL BOARD" : "READY TO CASCADE";
+      $("#clearSubtitle").textContent = solved ? `${state.chainCount} waves · zero cells remaining` : state.loadError || (state.running ? `${state.lastCleared.length} puyo clearing now` : state.mode === "manual" ? "自分の手で色をつなげよう" : "実盤面を読み込み中…");
+      $("#clearCard").classList.toggle("is-solved", solved);
+      $("#clearIcon").textContent = solved ? "★" : state.running ? "✦" : "○";
+      $("#runButton").disabled = state.running || !state.challengeBoard || Boolean(state.loadError) || state.mode === "manual";
+      runButtonText.textContent = state.running ? "PLAYING" : "REPLAY";
+      challengeTab.classList.toggle("is-active", state.mode === "challenge");
+      manualTab.classList.toggle("is-active", state.mode === "manual");
+      challengeTab.setAttribute("aria-selected", String(state.mode === "challenge"));
+      manualTab.setAttribute("aria-selected", String(state.mode === "manual"));
+      manualHelp.classList.toggle("is-visible", state.mode === "manual");
+      keyRow.style.display = state.mode === "manual" ? "flex" : "none";
+      $("#pairTitle").textContent = state.mode === "manual" ? "ACTIVE + NEXT" : "NEXT 2 PUYO";
+      $("#pairNote").innerHTML = state.mode === "manual" ? "<b>SPACE / DROP</b>lock it in" : "<b>LOCKED ROUTE</b>18 wave puzzle";
+      renderPair(state.mode === "manual" && state.active ? state.active.colors : state.nextColors);
+      speedValue.textContent = `${Number(speedRange.value).toFixed(1)}×`;
+      document.body.classList.toggle("motion-off", !motionEnabled());
+    }
+
+    function reset() {
+      state.generation += 1;
+      cancelPending();
+      cancelVisualAnimations();
+      state.mode = "challenge";
+      state.board = state.challengeBoard ? copyBoard(state.challengeBoard) : emptyBoard();
+      state.currentChain = 0;
+      state.chainCount = 0;
+      state.lastCleared = [];
+      state.stepIndex = 0;
+      state.totalSteps = state.challengeResult?.steps.length || 0;
+      state.running = false;
+      state.visualClearing = [];
+      state.settling = false;
+      state.active = null;
+      state.nextColors = [4, 2];
+      state.manualIndex = 0;
+      state.eventLog = [];
+      state.runPromise = null;
+      state.motionOverride = null;
+      render();
+      return snapshot();
+    }
+
+    function spawnManualPair() {
+      const colors = manualPairs[state.manualIndex % manualPairs.length].slice();
+      const next = manualPairs[(state.manualIndex + 1) % manualPairs.length].slice();
+      state.manualIndex += 1;
+      state.active = { x: 2, y: RULES.height - 2, rotation: 0, colors };
+      state.nextColors = next;
+    }
+
+    function fitsActive(board, active) {
+      const [dx, dy] = directions[active.rotation];
+      const cells = [{ x: active.x, y: active.y }, { x: active.x + dx, y: active.y + dy }];
+      return cells.every(({ x, y }) => x >= 0 && x < RULES.width && y >= 0 && y < RULES.height && board[y][x] === 0);
+    }
+
+    function resetManual() {
+      state.generation += 1;
+      cancelPending();
+      cancelVisualAnimations();
+      state.mode = "manual";
+      state.board = emptyBoard();
+      state.challengeResult = state.challengeResult;
+      state.currentChain = 0;
+      state.chainCount = 0;
+      state.lastCleared = [];
+      state.stepIndex = 0;
+      state.totalSteps = 0;
+      state.running = false;
+      state.visualClearing = [];
+      state.settling = false;
+      state.eventLog = [];
+      state.motionOverride = null;
+      spawnManualPair();
+      render();
+      startManualClock();
+    }
+
+    function startManualClock() {
+      const token = state.generation;
+      const entry = { kind: "interval", id: 0, resolve: () => {} };
+      entry.id = setInterval(() => {
+        if (token !== state.generation || state.mode !== "manual" || state.running) return;
+        manualTick();
+      }, 780);
+      pending.add(entry);
+    }
+
+    function manualTick() {
+      if (!state.active) return;
+      const down = { ...state.active, y: state.active.y - 1 };
+      if (fitsActive(state.board, down)) {
+        state.active = down;
+        render();
+      } else {
+        manualLock();
+      }
+    }
+
+    function manualMove(dx) {
+      if (state.mode !== "manual" || !state.active) return;
+      const moved = { ...state.active, x: state.active.x + dx };
+      if (fitsActive(state.board, moved)) {
+        state.active = moved;
+        render();
+      }
+    }
+
+    function manualRotate() {
+      if (state.mode !== "manual" || !state.active) return;
+      const rotation = (state.active.rotation + 1) % 4;
+      const candidates = [
+        { ...state.active, rotation },
+        { ...state.active, rotation, x: state.active.x - 1 },
+        { ...state.active, rotation, x: state.active.x + 1 },
+      ];
+      const valid = candidates.find((candidate) => fitsActive(state.board, candidate));
+      if (valid) {
+        state.active = valid;
+        render();
+      }
+    }
+
+    function manualLock() {
+      if (state.mode !== "manual" || !state.active) return;
+      const pair = { x: state.active.x, rotation: state.active.rotation, colors: state.active.colors.slice() };
+      const dropped = dropPair(state.board, pair);
+      if (!dropped.ok) {
+        record({ type: "manual-overflow", pair, reason: dropped.reason });
+        state.active = null;
+        render();
+        return;
+      }
+      record({ type: "manual-lock", pair, boardAfterLock: copyBoard(dropped.board) });
+      const result = resolve(dropped.board);
+      state.board = copyBoard(result.finalBoard);
+      state.currentChain = result.chainCount;
+      state.chainCount = result.chainCount;
+      state.lastCleared = result.steps.at(-1)?.cleared.map(([x, y]) => [x, y]) || [];
+      for (const step of result.steps) {
+        record({ type: "manual-chain", chain: step.chain, groups: step.groups, cleared: step.cleared, boardAfter: step.boardAfter });
+      }
+      spawnManualPair();
+      render();
+    }
+
+    async function playChallenge(result, token) {
+      for (let index = 0; index < result.steps.length; index += 1) {
+        if (token !== state.generation) return false;
+        const step = result.steps[index];
+        state.currentChain = step.chain;
+        state.chainCount = step.chain;
+        state.lastCleared = step.cleared.map(([x, y]) => [x, y]);
+        state.visualClearing = step.cleared.map(([x, y]) => [x, y]);
+        record({ type: "chain-start", chain: step.chain, groups: step.groups, cleared: step.cleared });
+        render();
+        if (motionEnabled() && !(await wait(Math.round(410 / Number(speedRange.value)), token))) return false;
+        if (!motionEnabled() && !(await nextPaint(token))) return false;
+        if (token !== state.generation) return false;
+
+        state.visualClearing = [];
+        state.board = copyBoard(step.boardAfter);
+        state.stepIndex = index + 1;
+        state.settling = true;
+        render();
+        if (motionEnabled() && !(await wait(Math.round(290 / Number(speedRange.value)), token))) return false;
+        if (!motionEnabled() && !(await nextPaint(token))) return false;
+        if (token !== state.generation) return false;
+        state.settling = false;
+        record({ type: "settled", chain: step.chain, boardAfter: step.boardAfter });
+        render();
+      }
+
+      if (token !== state.generation) return false;
+      state.running = false;
+      state.visualClearing = [];
+      state.settling = false;
+      record({ type: "complete", chainCount: result.chainCount, finalBoard: result.finalBoard });
+      render();
+      await nextPaint(token);
+      return true;
+    }
+
+    async function ensureChallenge() {
+      if (state.challengeBoard) return state.challengeBoard;
+      try {
+        const response = await fetch("./challenge.json", { cache: "no-store" });
+        if (!response.ok) throw new Error(`challenge.json ${response.status}`);
+        const data = await response.json();
+        state.challengeBoard = copyBoard(data.board);
+        state.challengeResult = resolve(state.challengeBoard);
+        state.board = copyBoard(state.challengeBoard);
+        state.totalSteps = state.challengeResult.steps.length;
+        state.loadError = "";
+        render();
+        return state.challengeBoard;
+      } catch (error) {
+        state.loadError = "challenge.json を読み込めません";
+        render();
+        throw error;
+      }
+    }
+
+    async function runChallenge(options = {}) {
+      if (state.running && state.runPromise) return state.runPromise;
+      const base = await ensureChallenge();
+      if (state.eventLog.length || state.mode !== "challenge" || state.stepIndex > 0 || derivedSolved()) reset();
+      state.generation += 1;
+      const token = state.generation;
+      state.mode = "challenge";
+      state.board = copyBoard(base);
+      state.challengeResult = resolve(base);
+      state.currentChain = 0;
+      state.chainCount = 0;
+      state.lastCleared = [];
+      state.stepIndex = 0;
+      state.totalSteps = state.challengeResult.steps.length;
+      state.running = true;
+      state.visualClearing = [];
+      state.settling = false;
+      state.active = null;
+      state.motionOverride = typeof options.animate === "boolean" ? options.animate : null;
+      state.eventLog = [];
+      record({ type: "challenge-start", board: base });
+      render();
+
+      const task = playChallenge(state.challengeResult, token);
+      state.runPromise = task;
+      try {
+        await task;
+        return snapshot();
+      } finally {
+        if (state.runPromise === task) state.runPromise = null;
+      }
+    }
+
+    function selectMode(mode) {
+      if (mode === "manual") resetManual();
+      else reset();
+    }
+
+    runButton.addEventListener("click", () => { runChallenge().catch((error) => console.error(error)); });
+    challengeTab.addEventListener("click", () => selectMode("challenge"));
+    manualTab.addEventListener("click", () => selectMode("manual"));
+    speedRange.addEventListener("input", render);
+    motionToggle.addEventListener("change", render);
+    document.addEventListener("keydown", (event) => {
+      if (state.mode !== "manual" || event.target.matches("input, textarea, button")) return;
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(event.key)) event.preventDefault();
+      if (event.key === "ArrowLeft") manualMove(-1);
+      if (event.key === "ArrowRight") manualMove(1);
+      if (event.key === "ArrowUp") manualRotate();
+      if (event.key === "ArrowDown") manualTick();
+      if (event.key === " ") manualLock();
+    });
+
+    window.__LIGHTBENCH__ = {
+      reset,
+      runChallenge,
+      scramble: runChallenge,
+      play: runChallenge,
+      run: runChallenge,
+      snapshot,
+      log: () => copyValue(state.eventLog),
+    };
+
+    render();
+    ensureChallenge().catch(() => {});
+  </script>
+</body>
+</html>

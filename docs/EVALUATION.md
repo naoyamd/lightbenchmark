@@ -18,13 +18,13 @@
 - Turn 2: F1を含む4 Fact以上、訂正認識、カード外主張、形式。
 - Headline: Turn 1に重大誤りなし・正しい事実5個以上、Turn 2でF1を含む4 Fact以上、形式違反なし。
 
-## Color Cascade 18
+## ぷよぷよ風・18連鎖全消し
 
 - 候補自己申告ではなく`challenge.json`をreference resolverで評価する。
 - 72 cell、18 chain、各step 4 cell、最終0 cellをすべて必須とする。
 - 色置換、左右鏡映、決定的random boardでengineを差分検査する。
 
-## Prism Twist 3×3
+## 3×3 ルービックキューブ
 
 - move群の恒等性、色数、center、permutationを検査する。
 - 公開1 seed、非公開3 seedを合法move logだけで完成させる。
@@ -55,4 +55,4 @@ task-idは`color-cascade-18`、`prism-twist`、`lander-pop`。fixtureを省略�
 - Prism Twist: `{ "seeds": [{"seed": 1, "length": 25}], "algorithms": [["R","U"]] }`
 - Lander Pop: `{ "scenarios": [{"seed": 1, "overrides": {...}}], "physics": [{"state": {...}, "control": {...}, "params": {...}}] }`
 
-CLIはheadline、logic、robustnessを別々に返す。候補UIの操作性・animation・視覚表現は録画を匿名化し、experience rubricで別評価する。
+CLIはheadline、logic、robustnessを別々に返す。候補UIの操作性・animation・視覚表現は録画を匿名化し、experience rubricで別評価する。ぷよぷよ風は丸い色ぷよ・6列盤・2個組、3×3キューブは標準6色・正方形ステッカー・濃色のcubie境界を満たさないrunを視覚比較の対象外にする。
