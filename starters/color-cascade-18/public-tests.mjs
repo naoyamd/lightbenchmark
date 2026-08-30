@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { RULES, dropPair, resolve } from "./submission/site/engine.mjs";
+import { RULES, dropPair, planChallenge, resolve } from "./submission/site/engine.mjs";
 
 const empty = () => Array.from({ length: 14 }, () => Array(6).fill(0));
 
@@ -21,10 +21,20 @@ assert.equal(dropped.board[0][2], 1);
 assert.equal(dropped.board[1][2], 2);
 
 const challenge = JSON.parse(await readFile("./submission/site/challenge.json", "utf8"));
-assert.deepEqual(Object.keys(challenge), ["board", "pair"]);
-assert.deepEqual(challenge.pair, { x: 0, rotation: 1, colors: [3, 3] });
-assert.equal(challenge.board.flat().filter(Boolean).length, 70);
-const droppedChallenge = dropPair(challenge.board, challenge.pair);
+assert.deepEqual(Object.keys(challenge), ["seed", "goal"]);
+assert.equal(challenge.goal.board.flat().filter(Boolean).length, 70);
+const plan = planChallenge(structuredClone(challenge.goal), challenge.seed);
+assert.equal(plan.setupPairs.length, 35);
+assert.deepEqual(plan.triggerPair, challenge.goal.pair);
+let plannedBoard = empty();
+for (const pair of plan.setupPairs) {
+  const step = dropPair(plannedBoard, pair);
+  assert.equal(step.ok, true);
+  assert.equal(resolve(step.board).chainCount, 0, "setup must not clear early");
+  plannedBoard = step.board;
+}
+assert.deepEqual(plannedBoard, challenge.goal.board);
+const droppedChallenge = dropPair(plannedBoard, plan.triggerPair);
 assert.equal(droppedChallenge.ok, true);
 assert.equal(droppedChallenge.board.flat().filter(Boolean).length, 72);
 const result = resolve(droppedChallenge.board);

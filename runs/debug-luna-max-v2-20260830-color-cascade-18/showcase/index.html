@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Color Cascade</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f5f3ff;
+      --muted: #a5a7c5;
+      --panel: rgba(19, 23, 53, .75);
+      --line: rgba(185, 193, 255, .2);
+      --pink: #ff6688;
+      --teal: #43d9cf;
+      --gold: #ffc95a;
+      --violet: #a88dff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #090d20; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    [data-lightbench-stage] {
+      position: relative;
+      width: 100%;
+      height: 100dvh;
+      min-height: 540px;
+      overflow: hidden;
+      isolation: isolate;
+      background: #0b1028;
+    }
+    [data-lightbench-stage]::before,
+    [data-lightbench-stage]::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      border-radius: 999px;
+      filter: blur(2px);
+      pointer-events: none;
+    }
+    [data-lightbench-stage]::before {
+      width: 38vmax; height: 38vmax; left: -14vmax; top: -17vmax;
+      background: radial-gradient(circle, rgba(93, 104, 255, .23), transparent 68%);
+    }
+    [data-lightbench-stage]::after {
+      width: 32vmax; height: 32vmax; right: -13vmax; bottom: -14vmax;
+      background: radial-gradient(circle, rgba(255, 94, 174, .16), transparent 68%);
+    }
+    #scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    .topline {
+      position: absolute;
+      top: max(18px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #d9dcff;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .19em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      opacity: .84;
+      pointer-events: none;
+    }
+    .topline i { width: 7px; height: 7px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 14px var(--pink); }
+
+    .hud {
+      position: absolute;
+      left: clamp(16px, 4vw, 48px);
+      bottom: max(18px, env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-columns: repeat(5, auto);
+      gap: 7px;
+      pointer-events: none;
+    }
+    .stat {
+      min-width: 70px;
+      padding: 9px 11px 10px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: var(--panel);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .2);
+      backdrop-filter: blur(12px);
+    }
+    .stat small { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+    .stat strong { display: block; margin-top: 4px; color: var(--ink); font-size: 14px; font-weight: 800; letter-spacing: .04em; }
+    .stat.status { min-width: 104px; }
+    .stat.status strong { color: #ffd8e0; }
+
+    .pair-panel {
+      position: absolute;
+      right: clamp(16px, 5vw, 64px);
+      top: 50%;
+      transform: translateY(-50%);
+      display: grid;
+      gap: 13px;
+      width: 92px;
+      pointer-events: none;
+    }
+    .pair-card {
+      padding: 10px 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .22);
+      backdrop-filter: blur(12px);
+    }
+    .pair-card small { display: block; margin-bottom: 8px; color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .16em; text-align: center; }
+    .pair-stack { position: relative; height: 58px; width: 48px; margin: 0 auto; }
+    .mini-puyo {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      box-shadow: inset -4px -5px 7px rgba(22, 19, 66, .2), inset 4px 4px 7px rgba(255,255,255,.32), 0 5px 11px rgba(0,0,0,.24);
+    }
+    .mini-puyo:first-child { left: 4px; top: 23px; }
+    .mini-puyo:last-child { left: 14px; top: 4px; }
+    .pair-card.next .mini-puyo:first-child { top: 23px; left: 4px; }
+    .pair-card.next .mini-puyo:last-child { top: 4px; left: 14px; }
+    .mini-puyo::before {
+      content: "••";
+      position: absolute;
+      left: 8px;
+      top: 5px;
+      color: rgba(29, 19, 68, .72);
+      font-family: Georgia, serif;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      line-height: 1;
+    }
+    .mini-puyo::after {
+      content: "⌣";
+      position: absolute;
+      left: 10px;
+      top: 13px;
+      color: rgba(29, 19, 68, .68);
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .c1 { background: radial-gradient(circle at 32% 25%, #ffb3bd, var(--pink) 42%, #d84276 100%); }
+    .c2 { background: radial-gradient(circle at 32% 25%, #b2fff4, var(--teal) 42%, #199eae 100%); }
+    .c3 { background: radial-gradient(circle at 32% 25%, #fff1a0, var(--gold) 42%, #de8c35 100%); }
+    .c4 { background: radial-gradient(circle at 32% 25%, #e0d5ff, var(--violet) 42%, #6955ca 100%); }
+
+    @media (max-width: 650px) {
+      .pair-panel { right: 12px; top: 78px; transform: none; width: 74px; grid-template-columns: 1fr 1fr; gap: 6px; }
+      .pair-card { padding: 7px 4px 8px; }
+      .pair-card small { margin-bottom: 5px; font-size: 8px; }
+      .pair-stack { transform: scale(.78); transform-origin: top center; margin-bottom: -11px; }
+      .hud { left: 12px; right: 12px; bottom: 12px; grid-template-columns: repeat(3, 1fr); }
+      .stat { min-width: 0; padding: 7px 8px; }
+      .stat.status { min-width: 0; grid-column: span 2; }
+      .stat strong { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main data-lightbench-stage aria-label="18 chain color cascade">
+    <canvas id="scene" aria-hidden="true"></canvas>
+    <div class="topline"><i></i><span>18 WAVE CASCADE</span><i></i></div>
+    <div class="pair-panel" aria-hidden="true">
+      <div class="pair-card" id="active-card"><small>ACTIVE</small><div class="pair-stack"><span class="mini-puyo"></span><span class="mini-puyo"></span></div></div>
+      <div class="pair-card next" id="next-card"><small>NEXT</small><div class="pair-stack"><span class="mini-puyo"></span><span class="mini-puyo"></span></div></div>
+    </div>
+    <div class="hud" aria-live="polite">
+      <div class="stat"><small>SEED</small><strong id="seed-value">—</strong></div>
+      <div class="stat"><small>PLACED</small><strong id="placed-value">0 / 36</strong></div>
+      <div class="stat"><small>CHAIN</small><strong id="chain-value">0</strong></div>
+      <div class="stat"><small>WAVES</small><strong id="waves-value">0</strong></div>
+      <div class="stat status"><small>STATUS</small><strong id="status-value">READY</strong></div>
+    </div>
+  </main>
+  <script type="module">
+    import { dropPair, planChallenge, resolve, RULES } from "./engine.mjs";
+
+    const stage = document.querySelector("[data-lightbench-stage]");
+    const canvas = document.getElementById("scene");
+    const ctx = canvas.getContext("2d");
+    const seedValue = document.getElementById("seed-value");
+    const placedValue = document.getElementById("placed-value");
+    const chainValue = document.getElementById("chain-value");
+    const wavesValue = document.getElementById("waves-value");
+    const statusValue = document.getElementById("status-value");
+    const activeCard = document.getElementById("active-card");
+    const nextCard = document.getElementById("next-card");
+    const colors = [null, [255, 102, 136], [67, 217, 207], [255, 201, 90], [168, 141, 255]];
+    const emptyBoard = () => Array.from({ length: RULES.height }, () => Array(RULES.width).fill(0));
+    const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
+
+    let challenge;
+    let plan;
+    let generation = 0;
+    let canvasFrame = 0;
+    const timers = new Set();
+    let layout = { cell: 30, left: 0, top: 90, width: 180, height: 420 };
+    const state = {
+      board: emptyBoard(),
+      placedPairs: 0,
+      chain: 0,
+      waves: 0,
+      clearCount: 0,
+      phase: "ready",
+      solved: false,
+      landed: false,
+      activePair: null,
+      nextPair: null,
+      clearing: null,
+      events: [],
+    };
+
+    function tokenIsCurrent(token) { return token === generation; }
+
+    function stopMotion() {
+      generation += 1;
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+      if (canvasFrame) cancelAnimationFrame(canvasFrame);
+      canvasFrame = 0;
+    }
+
+    function frame(token) {
+      return new Promise(resolveFrame => {
+        canvasFrame = requestAnimationFrame(() => {
+          canvasFrame = 0;
+          if (tokenIsCurrent(token)) draw();
+          resolveFrame(tokenIsCurrent(token));
+        });
+      });
+    }
+
+    function pause(ms, token) {
+      return new Promise(resolvePause => {
+        const timer = setTimeout(() => {
+          timers.delete(timer);
+          resolvePause(tokenIsCurrent(token));
+        }, ms);
+        timers.add(timer);
+      });
+    }
+
+    function present(token, ms = 0) {
+      return frame(token).then(ok => ok ? pause(ms, token) : false);
+    }
+
+    function roundedRect(context, x, y, width, height, radius) {
+      const r = Math.min(radius, width / 2, height / 2);
+      context.beginPath();
+      context.moveTo(x + r, y);
+      context.arcTo(x + width, y, x + width, y + height, r);
+      context.arcTo(x + width, y + height, x, y + height, r);
+      context.arcTo(x, y + height, x, y, r);
+      context.arcTo(x, y, x + width, y, r);
+      context.closePath();
+    }
+
+    function calculateLayout() {
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      const cell = Math.max(18, Math.min((width - 42) / 8, (height - 138) / RULES.height));
+      const fieldWidth = cell * RULES.width;
+      const fieldHeight = cell * RULES.height;
+      layout = { cell, left: width / 2 - fieldWidth / 2, top: Math.max(68, (height - fieldHeight) / 2 + 14), width: fieldWidth, height: fieldHeight };
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function drawBackdrop(width, height) {
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, "#10163a");
+      gradient.addColorStop(.52, "#0b112d");
+      gradient.addColorStop(1, "#090d20");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      const glow = ctx.createRadialGradient(width * .5, height * .44, 0, width * .5, height * .44, Math.max(width, height) * .55);
+      glow.addColorStop(0, "rgba(86, 99, 194, .12)");
+      glow.addColorStop(1, "rgba(12, 15, 41, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "rgba(206, 212, 255, .42)";
+      const points = [[.07,.18,1],[.16,.72,1],[.29,.11,1],[.76,.19,1],[.88,.34,1],[.94,.77,1],[.68,.87,1],[.38,.9,1],[.54,.08,1]];
+      for (const [px, py, size] of points) ctx.fillRect(width * px, height * py, size, size);
+    }
+
+    function drawPuyo(x, y, cell, color, faded = false) {
+      const rgb = colors[color] || colors[1];
+      const radius = cell * .39;
+      const cx = x + cell / 2;
+      const cy = y + cell / 2;
+      ctx.save();
+      ctx.globalAlpha = faded ? .54 : 1;
+      ctx.shadowColor = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.34)`;
+      ctx.shadowBlur = cell * .23;
+      const fill = ctx.createRadialGradient(cx - radius * .38, cy - radius * .42, radius * .08, cx, cy, radius * 1.12);
+      fill.addColorStop(0, `rgba(${Math.min(255, rgb[0] + 100)},${Math.min(255, rgb[1] + 100)},${Math.min(255, rgb[2] + 100)},1)`);
+      fill.addColorStop(.3, `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`);
+      fill.addColorStop(1, `rgba(${Math.max(0, rgb[0] - 62)},${Math.max(0, rgb[1] - 62)},${Math.max(0, rgb[2] - 48)},1)`);
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,255,255,.42)";
+      ctx.beginPath();
+      ctx.ellipse(cx - radius * .33, cy - radius * .42, radius * .18, radius * .1, -.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(31, 22, 71, .73)";
+      ctx.beginPath();
+      ctx.arc(cx - radius * .25, cy - radius * .05, radius * .105, 0, Math.PI * 2);
+      ctx.arc(cx + radius * .25, cy - radius * .05, radius * .105, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(31, 22, 71, .7)";
+      ctx.lineWidth = Math.max(1.3, cell * .035);
+      ctx.beginPath();
+      ctx.arc(cx, cy + radius * .08, radius * .25, .25, Math.PI - .25);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,.3)";
+      ctx.lineWidth = Math.max(1, cell * .025);
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * .82, Math.PI * 1.18, Math.PI * 1.64);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function draw() {
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      ctx.clearRect(0, 0, width, height);
+      drawBackdrop(width, height);
+      const { left, top, cell, width: fieldWidth, height: fieldHeight } = layout;
+      ctx.save();
+      ctx.shadowColor = "rgba(46, 51, 133, .34)";
+      ctx.shadowBlur = 28;
+      ctx.fillStyle = "rgba(9, 14, 39, .9)";
+      roundedRect(ctx, left - 7, top - 7, fieldWidth + 14, fieldHeight + 14, cell * .33);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      const frameGradient = ctx.createLinearGradient(left, top, left + fieldWidth, top + fieldHeight);
+      frameGradient.addColorStop(0, "rgba(113, 126, 222, .25)");
+      frameGradient.addColorStop(.5, "rgba(44, 49, 114, .1)");
+      frameGradient.addColorStop(1, "rgba(222, 107, 184, .16)");
+      ctx.fillStyle = frameGradient;
+      roundedRect(ctx, left - 3, top - 3, fieldWidth + 6, fieldHeight + 6, cell * .28);
+      ctx.fill();
+      ctx.restore();
+
+      for (let y = 0; y < RULES.height; y += 1) {
+        for (let x = 0; x < RULES.width; x += 1) {
+          const px = left + x * cell;
+          const py = top + (RULES.height - 1 - y) * cell;
+          ctx.fillStyle = (x + y) % 2 ? "rgba(122, 133, 213, .08)" : "rgba(122, 133, 213, .05)";
+          roundedRect(ctx, px + 1.5, py + 1.5, cell - 3, cell - 3, cell * .17);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(170, 181, 255, .075)";
+          ctx.lineWidth = 1;
+          roundedRect(ctx, px + 2, py + 2, cell - 4, cell - 4, cell * .16);
+          ctx.stroke();
+          const value = state.board[y][x];
+          if (value) {
+            const clearing = state.clearing?.some(cellPos => cellPos[0] === x && cellPos[1] === y);
+            drawPuyo(px, py, cell, value, Boolean(clearing));
+            if (clearing) {
+              ctx.save();
+              ctx.strokeStyle = "rgba(255,255,255,.88)";
+              ctx.lineWidth = Math.max(2, cell * .05);
+              ctx.beginPath();
+              ctx.arc(px + cell / 2, py + cell / 2, cell * (.43 + .04 * Math.sin(Date.now() / 90)), 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
+      }
+      updateHud();
+      updatePairCards();
+    }
+
+    function currentStatus() {
+      if (state.solved) return "ALL CLEAR";
+      if (state.phase === "failed") return "FAILED";
+      if (state.phase === "clearing") return "CLEARING";
+      if (state.phase === "resolving") return "CHAINING";
+      if (state.phase === "building") return "BUILDING";
+      if (state.phase === "trigger") return "TRIGGER";
+      return "READY";
+    }
+
+    function updateHud() {
+      seedValue.textContent = `0x${(challenge?.seed >>> 0).toString(16).padStart(8, "0")}`;
+      placedValue.textContent = `${state.placedPairs} / 36`;
+      chainValue.textContent = String(state.chain);
+      wavesValue.textContent = String(state.waves);
+      statusValue.textContent = currentStatus();
+    }
+
+    function setMini(element, color) {
+      element.className = "mini-puyo" + (color ? ` c${color}` : "");
+      element.style.opacity = color ? "1" : ".24";
+    }
+
+    function updatePairCards() {
+      const active = state.activePair || plan?.setupPairs[0] || challenge?.goal.pair;
+      const next = state.nextPair || plan?.setupPairs[1] || challenge?.goal.pair;
+      const activeBits = activeCard.querySelectorAll(".mini-puyo");
+      const nextBits = nextCard.querySelectorAll(".mini-puyo");
+      setMini(activeBits[0], active?.colors?.[0]);
+      setMini(activeBits[1], active?.colors?.[1]);
+      setMini(nextBits[0], next?.colors?.[0]);
+      setMini(nextBits[1], next?.colors?.[1]);
+    }
+
+    function record(event) {
+      state.events.push(clone(event));
+    }
+
+    function reset() {
+      stopMotion();
+      plan = planChallenge(clone(challenge.goal), challenge.seed >>> 0);
+      state.board = emptyBoard();
+      state.placedPairs = 0;
+      state.chain = 0;
+      state.waves = 0;
+      state.clearCount = 0;
+      state.phase = "ready";
+      state.solved = false;
+      state.landed = false;
+      state.clearing = null;
+      state.events = [];
+      state.activePair = plan.setupPairs[0];
+      state.nextPair = plan.setupPairs[1];
+      calculateLayout();
+      draw();
+      return snapshot();
+    }
+
+    async function runChallenge() {
+      reset();
+      const token = generation;
+      state.phase = "building";
+      await present(token, 90);
+      if (!tokenIsCurrent(token)) return snapshot();
+
+      for (let index = 0; index < plan.setupPairs.length; index += 1) {
+        const pair = plan.setupPairs[index];
+        const dropped = dropPair(state.board, pair);
+        if (!dropped.ok) {
+          state.phase = "failed";
+          state.activePair = pair;
+          draw();
+          return snapshot();
+        }
+        const settled = resolve(dropped.board);
+        if (settled.chainCount !== 0) {
+          state.phase = "failed";
+          state.activePair = pair;
+          draw();
+          return snapshot();
+        }
+        state.board = dropped.board;
+        state.placedPairs = index + 1;
+        state.activePair = plan.setupPairs[index + 1] || plan.triggerPair;
+        state.nextPair = plan.setupPairs[index + 2] || plan.triggerPair;
+        record({ type: "drop", index: index + 1, pair: clone(pair), board: clone(state.board) });
+        if (!await present(token, 38)) return snapshot();
+      }
+
+      state.phase = "trigger";
+      const trigger = dropPair(state.board, plan.triggerPair);
+      if (!trigger.ok) {
+        state.phase = "failed";
+        draw();
+        return snapshot();
+      }
+      state.board = trigger.board;
+      state.placedPairs = 36;
+      state.landed = true;
+      state.activePair = plan.triggerPair;
+      state.nextPair = null;
+      record({ type: "drop", index: 36, pair: clone(plan.triggerPair), board: clone(state.board) });
+      const resolved = resolve(trigger.board);
+      await present(token, 105);
+      if (!tokenIsCurrent(token)) return snapshot();
+
+      for (const step of resolved.steps) {
+        state.phase = "clearing";
+        state.clearing = clone(step.cleared);
+        draw();
+        if (!await present(token, 92)) return snapshot();
+        state.board = clone(step.boardAfter);
+        state.chain = step.chain;
+        state.waves = resolved.steps.slice(0, step.chain).length;
+        state.clearCount += step.cleared.length;
+        state.clearing = null;
+        state.phase = "resolving";
+        record({ type: "wave", chain: step.chain, groups: clone(step.groups), cleared: clone(step.cleared), boardAfter: clone(step.boardAfter) });
+        if (!await present(token, 78)) return snapshot();
+      }
+
+      const empty = state.board.flat().every(cell => cell === 0);
+      state.solved = empty && state.chain === resolved.chainCount && state.chain === 18 && state.clearCount === 72 && state.landed;
+      state.phase = state.solved ? "done" : "failed";
+      state.clearing = null;
+      record({ type: state.solved ? "complete" : "failed", chain: state.chain, clearCount: state.clearCount, board: clone(state.board) });
+      await present(token, 180);
+      return snapshot();
+    }
+
+    function snapshot() {
+      return clone({
+        seed: challenge?.seed >>> 0,
+        board: state.board,
+        placedPairs: state.placedPairs,
+        chain: state.chain,
+        chainCount: state.chain,
+        clearCount: state.clearCount,
+        waves: state.waves,
+        status: currentStatus(),
+        phase: state.phase,
+        solved: state.solved,
+        landed: state.landed,
+        next: state.nextPair,
+      });
+    }
+
+    function log() { return clone(state.events); }
+
+    async function bootstrap() {
+      const response = await fetch("./challenge.json", { cache: "no-store" });
+      challenge = await response.json();
+      window.__LIGHTBENCH__ = { reset, runChallenge, snapshot, log };
+      reset();
+      new ResizeObserver(() => { calculateLayout(); draw(); }).observe(stage);
+    }
+
+    bootstrap().catch(error => {
+      console.error(error);
+      state.phase = "failed";
+      statusValue.textContent = "FAILED";
+    });
+  </script>
+</body>
+</html>

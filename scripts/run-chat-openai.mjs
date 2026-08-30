@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { consumeCodexLine, createIsolatedCodexHome, emptyCodexStats, runCapturedProcess } from './run-codex-task.mjs';
 
 const scriptFile = fileURLToPath(import.meta.url);
 
@@ -27,28 +30,30 @@ export function addUsage(...responses) {
   };
 }
 
-async function createResponse(apiKey, body, signal) {
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!response.ok) throw new Error(`OpenAI API ${response.status}: ${(await response.text()).slice(0, 1000)}`);
-  const result = await response.json();
-  if (result.status !== 'completed') throw new Error(`OpenAI response did not complete: ${result.status}`);
-  if ((result.tools ?? []).length) throw new Error('OpenAI response unexpectedly exposed tools');
-  return result;
+function summedCodexUsage(...values) {
+  values = values.filter(value => value && typeof value === 'object');
+  if (!values.length) return null;
+  const number = (...keys) => values.map(value => keys.map(key => value?.[key]).find(Number.isFinite));
+  const sum = list => list.every(Number.isFinite) ? list.reduce((total, value) => total + value, 0) : null;
+  const inputTokens = sum(number('input_tokens', 'inputTokens'));
+  const outputTokens = sum(number('output_tokens', 'outputTokens'));
+  return {
+    inputTokens,
+    outputTokens,
+    cachedTokens: sum(number('cached_input_tokens', 'cachedTokens')),
+    reasoningTokens: sum(number('reasoning_output_tokens', 'reasoningTokens')),
+    totalTokens: inputTokens !== null && outputTokens !== null ? inputTokens + outputTokens : null,
+  };
 }
 
-export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max', timeoutMs = 720_000 }) {
+export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max', timeoutMs = 720_000, executable = 'codex', codexHomeSource }) {
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 720_000) {
     throw new Error('timeoutMs must be an integer from 1 to 720000');
   }
   const root = path.resolve(workspace);
   const stat = await lstat(root).catch(() => null);
   if (!stat?.isDirectory()) throw new Error(`workspace does not exist: ${root}`);
-  const outputFiles = ['turn1-response.txt', 'turn2-response.txt', 'chat-api-run.json'];
+  const outputFiles = ['turn1-response.txt', 'turn2-response.txt', 'chat-codex-events.jsonl', 'chat-codex-stderr.log', 'chat-api-run.json'];
   if ((await Promise.all(outputFiles.map(file => lstat(path.join(root, file)).catch(() => null)))).some(Boolean)) {
     throw new Error('chat output already exists; use a fresh workspace');
   }
@@ -61,68 +66,98 @@ export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max
   const payload = JSON.parse(payloadText);
   const promptHash = createHash('sha256').update(JSON.stringify(payload.sequence)).digest('hex');
   const startedAt = new Date();
-  const metadataFile = path.join(root, outputFiles[2]);
+  const deadline = startedAt.getTime() + timeoutMs;
+  const eventFile = path.join(root, outputFiles[2]);
+  const stderrFile = path.join(root, outputFiles[3]);
+  const metadataFile = path.join(root, outputFiles[4]);
+  const version = spawnSync(executable, ['--version'], { encoding: 'utf8', windowsHide: true });
+  const help = spawnSync(executable, ['exec', '--help'], { encoding: 'utf8', windowsHide: true }).stdout ?? '';
+  const isolationFlags = ['--ignore-user-config', '--ignore-rules', '--skip-git-repo-check'].filter(flag => help.includes(flag));
+  const featureList = spawnSync(executable, ['features', 'list'], { encoding: 'utf8', windowsHide: true }).stdout ?? '';
+  const disabledFeatures = ['plugins', 'apps', 'skill_search', 'browser_use', 'computer_use', 'image_generation', 'workspace_dependencies', 'web_search']
+    .filter(feature => new RegExp(`^${feature}\\s`, 'mu').test(featureList));
   const commonMetadata = {
     schemaVersion: 1,
-    harness: 'openai-responses-api',
-    isolation: 'tools-disabled-api',
+    harness: 'codex-cli-chat',
+    isolation: 'same-host-debug',
     officialEligible: false,
+    cliVersion: version.stdout?.trim() || null,
     modelRequested: model,
-    reasoningEffort: effort,
-    toolsSent: 0,
+    reasoningEffortRequested: effort,
+    isolationFlags,
+    disabledFeatures,
+    sandboxRequested: 'read-only',
+    networkEnforcement: 'requested-disabled; tool events independently rejected',
+    codexHomeIsolation: 'auth-only-temporary-home',
     startedAt: startedAt.toISOString(),
     endedAt: null,
     durationMs: null,
     terminationReason: 'running',
     promptHash,
+    budgetEnforcement: { wallClock: 'hard', agentSteps: 'observed-only', outputTokens: 'observed-only' },
   };
-  await writeFile(metadataFile, `${JSON.stringify(commonMetadata, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
-  const signal = AbortSignal.timeout(timeoutMs);
-  let first;
+  await Promise.all([
+    writeFile(eventFile, '', { encoding: 'utf8', flag: 'wx' }),
+    writeFile(stderrFile, '', { encoding: 'utf8', flag: 'wx' }),
+    writeFile(metadataFile, `${JSON.stringify(commonMetadata, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' }),
+  ]);
+  const stats = [emptyCodexStats(), emptyCodexStats()];
+  let isolatedCodexHome;
+  let emptyWorkspace;
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error('OPENAI_API_KEY is required');
-    first = await createResponse(apiKey, {
-      model,
-      input: [
-        { role: 'system', content: [{ type: 'input_text', text: system }] },
-        { role: 'user', content: [{ type: 'input_text', text: turn1 }] },
-      ],
-      reasoning: { effort },
-      tools: [],
-      store: true,
-      max_output_tokens: 4_000,
-    }, signal);
-    const firstText = responseText(first);
-    if (!firstText) throw new Error('turn 1 returned no output text');
-    await writeFile(path.join(root, outputFiles[0]), firstText, { encoding: 'utf8', flag: 'wx' });
+    isolatedCodexHome = await createIsolatedCodexHome(codexHomeSource);
+    emptyWorkspace = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-chat-'));
+    const baseArgs = [
+      ...isolationFlags, ...disabledFeatures.flatMap(feature => ['--disable', feature]), '--json', '--model', model,
+      '-c', `model_reasoning_effort="${effort}"`, '-c', 'approval_policy="never"',
+      '-c', 'sandbox_workspace_write.network_access=false', '-c', 'web_search="disabled"',
+    ];
+    const env = { ...process.env, CODEX_HOME: isolatedCodexHome };
+    const first = await runCapturedProcess({
+      executable,
+      args: ['exec', ...baseArgs, '--sandbox', 'read-only', '--output-last-message', path.join(root, outputFiles[0]), '-'],
+      cwd: emptyWorkspace,
+      input: `<system-instructions>\n${system}\n</system-instructions>\n<user-message>\n${turn1}\n</user-message>\n外部ツールを使わず、回答本文だけを出力してください。`,
+      timeoutMs: Math.max(1, deadline - Date.now()), stdoutFile: eventFile, stderrFile,
+      onStdoutLine: line => consumeCodexLine(stats[0], line), env,
+    });
+    if (first.timedOut) throw Object.assign(new Error('chat turn 1 timed out'), { name: 'TimeoutError' });
+    if (first.exitCode !== 0) throw new Error(`chat turn 1 process exited ${first.exitCode}`);
+    if (stats[0].toolCalls) throw new Error('chat turn 1 attempted to use tools');
+    const firstText = await readFile(path.join(root, outputFiles[0]), 'utf8');
+    if (!firstText.trim()) throw new Error('turn 1 returned no output text');
     await writeFile(metadataFile, `${JSON.stringify({
       ...commonMetadata,
       terminationReason: 'running-turn-2',
-      partialResponseIds: [first.id],
-      usage: addUsage(first),
+      threadId: stats[0].threadId,
+      usage: summedCodexUsage(stats[0].usage),
     }, null, 2)}\n`, 'utf8');
-    const second = await createResponse(apiKey, {
-      model,
-      previous_response_id: first.id,
-      input: [{ role: 'user', content: [{ type: 'input_text', text: turn2 }] }],
-      reasoning: { effort },
-      tools: [],
-      store: true,
-      max_output_tokens: 4_000,
-    }, signal);
-    const secondText = responseText(second);
-    if (!secondText) throw new Error('turn 2 returned no output text');
-    await writeFile(path.join(root, outputFiles[1]), secondText, { encoding: 'utf8', flag: 'wx' });
+    if (!stats[0].threadId) throw new Error('chat turn 1 did not report a resumable thread id');
+    const second = await runCapturedProcess({
+      executable,
+      args: ['exec', 'resume', ...baseArgs, '--output-last-message', path.join(root, outputFiles[1]), stats[0].threadId, '-'],
+      cwd: emptyWorkspace,
+      input: turn2,
+      timeoutMs: Math.max(1, deadline - Date.now()), stdoutFile: eventFile, stderrFile,
+      onStdoutLine: line => consumeCodexLine(stats[1], line), env,
+    });
+    if (second.timedOut) throw Object.assign(new Error('chat turn 2 timed out'), { name: 'TimeoutError' });
+    if (second.exitCode !== 0) throw new Error(`chat turn 2 process exited ${second.exitCode}`);
+    if (stats[1].toolCalls) throw new Error('chat turn 2 attempted to use tools');
+    const secondText = await readFile(path.join(root, outputFiles[1]), 'utf8');
+    if (!secondText.trim()) throw new Error('turn 2 returned no output text');
     const endedAt = new Date();
     const metadata = {
       ...commonMetadata,
-      modelReturned: second.model ?? first.model ?? null,
       endedAt: endedAt.toISOString(),
       durationMs: endedAt - startedAt,
       terminationReason: 'completed',
-      responseIds: [first.id, second.id],
-      usage: addUsage(first, second),
+      threadId: stats[0].threadId,
+      itemCount: stats[0].itemCount + stats[1].itemCount,
+      toolCalls: stats[0].toolCalls + stats[1].toolCalls,
+      subagents: stats[0].subagents + stats[1].subagents,
+      malformedLines: stats[0].malformedLines + stats[1].malformedLines,
+      usage: summedCodexUsage(stats[0].usage, stats[1].usage),
     };
     await writeFile(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
     return metadata;
@@ -133,11 +168,19 @@ export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max
       endedAt: endedAt.toISOString(),
       durationMs: endedAt - startedAt,
       terminationReason: error?.name === 'TimeoutError' ? 'timeout' : 'harness-error',
-      usage: first ? addUsage(first) : null,
+      threadId: stats[0].threadId,
+      itemCount: stats[0].itemCount + stats[1].itemCount,
+      toolCalls: stats[0].toolCalls + stats[1].toolCalls,
+      subagents: stats[0].subagents + stats[1].subagents,
+      malformedLines: stats[0].malformedLines + stats[1].malformedLines,
+      usage: summedCodexUsage(stats[0].usage, stats[1].usage),
       error: error instanceof Error ? error.message : String(error),
     };
     await writeFile(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
     throw error;
+  } finally {
+    if (emptyWorkspace) await rm(emptyWorkspace, { recursive: true, force: true });
+    if (isolatedCodexHome) await rm(isolatedCodexHome, { recursive: true, force: true });
   }
 }
 

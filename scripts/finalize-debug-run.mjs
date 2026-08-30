@@ -10,7 +10,7 @@ import { smokeShowcase } from './showcase-smoke.mjs';
 
 const scriptFile = fileURLToPath(import.meta.url);
 const projectRoot = path.resolve(path.dirname(scriptFile), '..');
-const codingTasks = new Set(['color-cascade-18', 'prism-twist', 'lander-pop']);
+const codingTasks = new Set(['color-cascade-18', 'prism-twist', 'robot-arm-sort']);
 const allowedShowcaseExtensions = new Set(['.html', '.css', '.js', '.mjs', '.json']);
 const showcaseLimit = 2 * 1024 * 1024;
 const sensitiveRepositoryPatterns = [
@@ -38,7 +38,7 @@ async function publishStaging(source, target) {
 async function evaluatorHash(taskId, legacyBufferJson = false, includeSmoke = true) {
   const files = taskId === 'japanese-chat'
     ? ['evaluator/chat.mjs']
-    : ['scripts/evaluate-submission.mjs', `evaluator/${({ 'color-cascade-18': 'puyo', 'prism-twist': 'cube', 'lander-pop': 'rocket' })[taskId]}.mjs`];
+    : ['scripts/evaluate-submission.mjs', `evaluator/${({ 'color-cascade-18': 'puyo', 'prism-twist': 'cube', 'robot-arm-sort': 'arm' })[taskId]}.mjs`];
   if (includeSmoke && taskId !== 'japanese-chat') files.splice(1, 0, 'scripts/showcase-smoke.mjs');
   return sha256((await Promise.all(files.map(file => readFile(path.join(projectRoot, file))))).map((bytes, index) => `${files[index]}\0${sha256(legacyBufferJson ? JSON.stringify(bytes) : bytes)}`).join('\n'));
 }
@@ -167,7 +167,7 @@ async function buildEvaluation(taskId, workspace, runner, showcaseState, fixture
     return {
       ...common,
       deterministicChecks,
-      headline: { pass: truthPass, reason: !first || !second ? '2ターンの回答が揃っていません' : truthPass ? '6事実と訂正を確認しました' : '事実判定または訂正に誤りがあります' },
+      headline: { pass: truthPass, reason: !first || !second ? '2ターンの回答が揃っていません' : truthPass ? '8事実と訂正を確認しました' : '事実判定または訂正に誤りがあります' },
       logic: { pass: truthPass },
       robustness: { pass: Boolean(deterministicChecks?.turn2?.truthPass) },
     };
@@ -274,7 +274,7 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
   const currentEvaluatorHash = await evaluatorHash(taskId, commitmentVersion === 2, commitmentVersion >= 3);
   if (commitment.evaluators?.[taskId] !== currentEvaluatorHash) throw new Error('evaluator does not match the fresh workspace commitment');
   runner = await recoverRunner(root, taskId, runner);
-  const spawned = taskId === 'japanese-chat' ? 0 : runner.subagents ?? 0;
+  const spawned = runner.subagents ?? 0;
   const usage = usageRecord(runner.usage, spawned);
   const limits = observedLimits(runner, usage);
   const staging = path.join(outputRoot, `_staging-${runId}-${randomUUID()}`);
@@ -371,16 +371,16 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
         provider: 'OpenAI',
         modelId,
         revision: runner.modelReturned ?? null,
-        reasoning: { requested: runner.reasoningEffortRequested ?? runner.reasoningEffort ?? null, effective: taskId === 'japanese-chat' && completed ? runner.reasoningEffort ?? null : null },
+        reasoning: { requested: runner.reasoningEffortRequested ?? runner.reasoningEffort ?? null, effective: completed ? (runner.reasoningEffortRequested ?? runner.reasoningEffort ?? null) : null },
       },
       execution: {
         startedAt: runner.startedAt ?? null,
         endedAt: runner.endedAt ?? null,
         timeZone,
         durationMs: runner.durationMs ?? null,
-        agentSteps: taskId === 'japanese-chat' ? (showcase ? 2 : 0) : runner.itemCount ?? null,
-        toolCalls: taskId === 'japanese-chat' ? 0 : runner.toolCalls ?? null,
-        commandPolicyBlocks: taskId === 'japanese-chat' ? 0 : runner.commandPolicyBlocks ?? 0,
+        agentSteps: runner.itemCount ?? null,
+        toolCalls: runner.toolCalls ?? null,
+        commandPolicyBlocks: runner.commandPolicyBlocks ?? 0,
         benchmarkRepositoryExposure: taskId === 'japanese-chat' ? [] : runner.sensitiveRepositoryReads ?? [],
         externalContextExposure: taskId === 'japanese-chat' ? [] : runner.externalContextReads ?? [],
         terminationReason: runner.terminationReason ?? 'unknown',

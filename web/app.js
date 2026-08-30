@@ -12,10 +12,10 @@ const showcaseSessions = new WeakMap();
 const showcaseMarker = '__LIGHTBENCH_ASSET_ROOT_9b41c8__';
 
 const taskDefinitions = [
-  { id: 'japanese-chat', number: '01', title: '日本語チャット', summary: '閉本で答え、資料を読んだ後に自分の誤りを訂正する。', promptVersion: 'JP-1.1' },
-  { id: 'color-cascade-18', number: '02', title: 'ぷよぷよ風・18連鎖全消し', summary: '丸い色ぷよが落ちる6列盤で、実ロジックによる18連鎖と全消しを再演する。', visualVersion: 'PUYO-1.5', promptVersion: 'PUYO-1.5' },
+  { id: 'japanese-chat', number: '01', title: '日本語チャット', summary: '閉本で答え、資料を読んだ後に自分の誤りを訂正する。', promptVersion: 'JP-2.0' },
+  { id: 'color-cascade-18', number: '02', title: 'ぷよぷよ風・18連鎖全消し', summary: '空盤面から配置を計画し、丸い色ぷよの18連鎖と全消しを実ロジックで再演する。', visualVersion: 'PUYO-2.0', promptVersion: 'PUYO-2.0' },
   { id: 'prism-twist', number: '03', title: '3×3 ルービックキューブ', summary: '標準6色・黒い境界の3×3キューブを、実際の面回転だけで揃える。', visualVersion: 'CUBE-1.4', promptVersion: 'CUBE-1.4' },
-  { id: 'lander-pop', number: '04', title: 'ロケット垂直着陸・自動制御', summary: '突風・抗力・アクチュエータ遅れの中で自動制御し、着陸・墜落・転倒まで実状態で見せる。', visualVersion: 'LANDER-2.1', promptVersion: 'LANDER-2.1' },
+  { id: 'robot-arm-sort', number: '04', title: '2リンク・ロボットアーム仕分け', summary: 'IK・速度制限・障害物回避・把持を満たし、3色の荷物を実軌道で仕分ける。', visualVersion: 'ARM-1.0', promptVersion: 'ARM-1.0' },
 ];
 
 const labels = {
@@ -168,28 +168,8 @@ function sortedNewest(items) {
   return [...items].sort((first, second) => runTime(second) - runTime(first) || String(second.runId).localeCompare(String(first.runId)));
 }
 
-function selectLatestCohort(modelRuns) {
-  const groups = new Map();
-  for (const run of modelRuns) {
-    const id = run.cohortId ?? '';
-    if (!groups.has(id)) groups.set(id, []);
-    groups.get(id).push(run);
-  }
-  const ranked = [...groups.entries()].sort((first, second) => {
-    const firstTasks = new Set(first[1].map(run => run.taskId).filter(taskId => taskDefinitions.some(task => task.id === taskId))).size;
-    const secondTasks = new Set(second[1].map(run => run.taskId).filter(taskId => taskDefinitions.some(task => task.id === taskId))).size;
-    const firstComplete = firstTasks === taskDefinitions.length;
-    const secondComplete = secondTasks === taskDefinitions.length;
-    return Number(secondComplete) - Number(firstComplete)
-      || Math.max(...second[1].map(runTime), 0) - Math.max(...first[1].map(runTime), 0)
-      || String(second[0]).localeCompare(String(first[0]));
-  });
-  const [id, cohortRuns] = ranked[0] ?? ['', []];
-  return { id, runs: cohortRuns };
-}
-
-function latestTaskRuns(cohortRuns) {
-  return taskDefinitions.map(definition => sortedNewest(cohortRuns.filter(run => run.taskId === definition.id))[0]).filter(Boolean);
+function latestTaskRuns(modelRuns) {
+  return taskDefinitions.map(definition => sortedNewest(modelRuns.filter(run => run.taskId === definition.id))[0]).filter(Boolean);
 }
 
 function aggregateValue(runs, getter) {
@@ -200,17 +180,18 @@ function aggregateValue(runs, getter) {
     : null;
 }
 
-function modelSummary(model, cohort, selectedRuns) {
+function modelSummary(model, selectedRuns) {
   const newest = sortedNewest(selectedRuns)[0];
-  return `<section class="model-summary" data-model-id="${text(model.modelId)}" data-cohort-id="${text(cohort.id)}">
-    <div class="summary-identity"><span class="summary-kicker">MODEL</span><strong>${text(model.modelId)}</strong><span class="summary-kicker">COHORT</span><strong>${text(cohort.id)}</strong><small>${selectedRuns.length} / ${taskDefinitions.length} task records</small></div>
+  const cohortCount = new Set(selectedRuns.map(run => run.cohortId)).size;
+  return `<section class="model-summary" data-model-id="${text(model.modelId)}">
+    <div class="summary-identity"><span class="summary-kicker">MODEL</span><strong>${text(model.modelId)}</strong><span class="summary-kicker">RESULT SET</span><strong>各課題の最新run</strong><small>${selectedRuns.length} / ${taskDefinitions.length} task records · ${cohortCount} cohort</small></div>
     <dl class="summary-metrics">
       ${metric('4run合計トークン', formatNumber(aggregateValue(selectedRuns, run => run.usage?.total?.totalTokens)))}
       ${metric('4run合計サブエージェント', formatNumber(aggregateValue(selectedRuns, run => run.agents?.spawned)))}
       ${metric('実行日時', formatDate(newest?.execution?.startedAt ?? newest?.execution?.endedAt))}
       ${metric('4run合計時間', formatDuration(aggregateValue(selectedRuns, run => run.execution?.durationMs)))}
     </dl>
-    ${selectedRuns.length < taskDefinitions.length ? `<p class="cohort-warning">このcohortの欠損セルは、過去cohortから補完していません。</p>` : ''}
+    ${cohortCount > 1 ? '<p class="cohort-warning">デバッグ修正を反映するためcohortが混在しています。各カードに採用cohortを併記しています。</p>' : ''}
     <p class="candidate-note">候補snapshotは正式判定に使用しません。</p>
   </section>`;
 }
@@ -257,10 +238,10 @@ function taskResult(definition, cohortRuns, allModelRuns) {
   const run = sortedNewest(cohortRuns.filter(item => item.taskId === definition.id))[0];
   const promptLabel = run && definition.promptVersion && run.versions?.prompt !== definition.promptVersion ? '修正版prompt' : '完成版prompt';
   if (!run) {
-    return `<article class="task-result task-missing" id="task-${definition.id}"><header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><div class="task-heading-meta"><a href="./prompts/${definition.id}.prompt.html">完成版prompt ↗</a><div class="primary-verdict"><span>正式判定</span><span class="badge">欠損 · 判定不能</span></div></div></header><p class="showcase-empty">このcohortに実行結果がありません。過去cohortから補完していません。</p></article>`;
+    return `<article class="task-result task-missing" id="task-${definition.id}"><header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><div class="task-heading-meta"><a href="./prompts/${definition.id}.prompt.html">完成版prompt ↗</a><div class="primary-verdict"><span>正式判定</span><span class="badge">欠損 · 判定不能</span></div></div></header><p class="showcase-empty">このモデルの実行結果がありません。</p></article>`;
   }
   return `<article class="task-result" id="task-${definition.id}">
-    <header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><div class="task-heading-meta"><a href="./prompts/${definition.id}.prompt.html">${promptLabel} ↗</a><div class="primary-verdict"><span>正式判定</span>${statusBadge(run)}</div></div></header>
+    <header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><div class="task-heading-meta"><a href="./prompts/${definition.id}.prompt.html">${promptLabel} ↗</a><small>cohort: ${text(run.cohortId)}</small><div class="primary-verdict"><span>正式判定</span>${statusBadge(run)}</div></div></header>
     ${showcaseMarkup(run, true)}
     ${evaluationSummary(run)}
     ${legacyRunNotice(definition, run)}
@@ -290,15 +271,14 @@ function renderModelPage(modelId) {
     results.innerHTML = `<div class="error">モデル「${text(modelId)}」の結果が見つかりません。</div>`;
     return;
   }
-  const cohort = selectLatestCohort(modelRuns);
-  const selectedRuns = latestTaskRuns(cohort.runs);
+  const selectedRuns = latestTaskRuns(modelRuns);
   const model = sortedNewest(modelRuns)[0].model;
   document.body.classList.add('model-page');
   pageNav.hidden = false;
   pageTitle.innerHTML = `${text(model.displayName)}<span>の4課題。</span>`;
-  pageLede.textContent = '同一cohortだけを表示。実演を先に、正式判定と副評価をあわせて確認できます。';
+  pageLede.textContent = '各課題の最新runを表示。実演を先に、正式判定と副評価をあわせて確認できます。';
   results.className = 'model-results';
-  results.innerHTML = `${modelSummary(model, cohort, selectedRuns)}<section class="task-grid" aria-label="4課題">${taskDefinitions.map(definition => taskResult(definition, cohort.runs, modelRuns)).join('')}</section>`;
+  results.innerHTML = `${modelSummary(model, selectedRuns)}<section class="task-grid" aria-label="4課題">${taskDefinitions.map(definition => taskResult(definition, selectedRuns, modelRuns)).join('')}</section>`;
   bindResultActions();
   mountModelShowcases();
 }
@@ -312,16 +292,15 @@ function renderModelIndex() {
   }
   const entries = [...models.values()].sort((first, second) => String(first[0].model.displayName).localeCompare(String(second[0].model.displayName)));
   pageTitle.innerHTML = '評価と実演を、<span>モデルごとに。</span>';
-  pageLede.textContent = 'カードを選ぶと、そのモデルの日本語・ぷよぷよ風ゲーム・3×3キューブ・ロケット着陸を1ページで追えます。';
+  pageLede.textContent = 'カードを選ぶと、そのモデルの日本語・ぷよぷよ風ゲーム・3×3キューブ・ロボットアームを1ページで追えます。';
   results.className = 'model-index';
   results.innerHTML = entries.map(items => {
-    const cohort = selectLatestCohort(items);
-    const newest = sortedNewest(cohort.runs)[0] ?? sortedNewest(items)[0];
-    const taskIds = new Set(taskDefinitions.map(({ id }) => id));
-    const taskRuns = cohort.runs.filter(run => taskIds.has(run.taskId));
+    const taskRuns = latestTaskRuns(items);
+    const newest = sortedNewest(taskRuns)[0] ?? sortedNewest(items)[0];
+    const cohortCount = new Set(taskRuns.map(run => run.cohortId)).size;
     const completedTasks = new Set(taskRuns.map(run => run.taskId)).size;
     const visibleTasks = new Set(taskRuns.filter(run => ['live', 'chat'].includes(showcaseKind(run))).map(run => run.taskId)).size;
-    return `<a class="model-card" href="${text(newest.model.pageUrl)}"><p class="model-card-kicker">MODEL</p><h2>${text(newest.model.displayName)}</h2><p>${text(newest.model.modelId)}</p><dl><div><dt>収録課題</dt><dd>${completedTasks} / 4</dd></div><div><dt>結果表示</dt><dd>${visibleTasks} / 4</dd></div><div><dt>最新cohort</dt><dd>${text(cohort.id)}</dd></div></dl><strong>4課題をまとめて見る →</strong></a>`;
+    return `<a class="model-card" href="${text(newest.model.pageUrl)}"><p class="model-card-kicker">MODEL</p><h2>${text(newest.model.displayName)}</h2><p>${text(newest.model.modelId)}</p><dl><div><dt>収録課題</dt><dd>${completedTasks} / 4</dd></div><div><dt>結果表示</dt><dd>${visibleTasks} / 4</dd></div><div><dt>使用cohort</dt><dd>${cohortCount}</dd></div></dl><strong>4課題をまとめて見る →</strong></a>`;
   }).join('') || '<div class="empty">まだモデルの結果がありません。</div>';
 }
 
@@ -347,7 +326,7 @@ function showcaseActions(taskId) {
   return {
     'color-cascade-18': { prepare: ['reset'], run: ['runChallenge'], label: '18連鎖を実行' },
     'prism-twist': { prepare: ['reset', 'scramble'], run: ['play'], label: 'キューブを解く' },
-    'lander-pop': { prepare: ['reset'], run: ['run'], label: '自動着陸を実行' },
+    'robot-arm-sort': { prepare: ['reset'], run: ['run'], label: '自動仕分けを実行' },
   }[taskId] ?? null;
 }
 

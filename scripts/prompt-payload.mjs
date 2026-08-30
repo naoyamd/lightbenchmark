@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 
 const defaultPromptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../prompts");
 const taskFiles = {
-  "japanese-chat": "japanese-chat-v1.1.md",
-  "color-cascade-18": "color-cascade-18-v1.5.md",
+  "japanese-chat": "japanese-chat-v2.md",
+  "color-cascade-18": "color-cascade-18-v2.md",
   "prism-twist": "prism-twist-v1.4.md",
-  "lander-pop": "lander-pop-v2.1.md",
+  "robot-arm-sort": "robot-arm-sort-v1.md",
 };
 
 function textBlocks(markdown, file) {

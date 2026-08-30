@@ -144,4 +144,72 @@ export function dropPair(board, pair) {
   return { ok: true, board: result };
 }
 
-export default { RULES, cloneBoard, findGroups, applyGravity, resolve, dropPair };
+function nextRandom(seed) {
+  let value = seed >>> 0 || 1;
+  return () => {
+    value ^= value << 13;
+    value ^= value >>> 17;
+    value ^= value << 5;
+    return value >>>= 0;
+  };
+}
+
+export function transformChallenge(goal, seed) {
+  const next = nextRandom(seed);
+  const colors = [1, 2, 3, 4];
+  for (let index = colors.length - 1; index > 0; index -= 1) {
+    const swap = next() % (index + 1);
+    [colors[index], colors[swap]] = [colors[swap], colors[index]];
+  }
+  const mirror = Boolean(next() & 1);
+  const recolor = (cell) => cell === 0 ? 0 : colors[cell - 1];
+  const board = cloneBoard(goal.board).map((row) => (mirror ? row.toReversed() : row).map(recolor));
+  const pair = {
+    x: mirror ? RULES.width - 1 - goal.pair.x : goal.pair.x,
+    rotation: mirror && goal.pair.rotation % 2 === 1 ? (goal.pair.rotation === 1 ? 3 : 1) : goal.pair.rotation,
+    colors: goal.pair.colors.map(recolor),
+  };
+  return { board, pair };
+}
+
+export function planChallenge(goal, seed = 0) {
+  const board = cloneBoard(goal?.board);
+  if (!validPair(goal?.pair) || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
+    throw new RangeError("goal and seed are invalid");
+  }
+  const columns = Array.from({ length: RULES.width }, (_, x) => board.map((row) => row[x]).filter(Boolean));
+  const heights = columns.map((column) => column.length);
+  if (heights.reduce((total, height) => total + height, 0) % 2 !== 0) throw new RangeError("goal needs an even cell count");
+
+  const used = Array(RULES.width).fill(0);
+  const setupPairs = [];
+  let incoming = 0;
+  for (let x = 0; x < RULES.width - 1; x += 1) {
+    const edge = (heights[x] & 1) ^ incoming;
+    if (edge) {
+      if (used[x] >= heights[x] || used[x + 1] >= heights[x + 1]) throw new RangeError("goal cannot be paired by adjacent drops");
+      setupPairs.push({ x, rotation: 1, colors: [columns[x][used[x]], columns[x + 1][used[x + 1]]] });
+      used[x] += 1;
+      used[x + 1] += 1;
+    }
+    incoming = edge;
+  }
+  if (((heights.at(-1) - used.at(-1)) & 1) !== 0) throw new RangeError("goal cannot be paired by adjacent drops");
+
+  const queues = columns.map((column, x) => {
+    const pairs = [];
+    for (let y = used[x]; y < column.length; y += 2) {
+      if (y + 1 >= column.length) throw new RangeError("goal leaves an unpaired cell");
+      pairs.push({ x, rotation: 0, colors: [column[y], column[y + 1]] });
+    }
+    return pairs;
+  });
+  const next = nextRandom(seed);
+  while (queues.some((queue) => queue.length)) {
+    const available = queues.map((queue, x) => queue.length ? x : -1).filter((x) => x >= 0);
+    setupPairs.push(queues[available[next() % available.length]].shift());
+  }
+  return { seed: seed >>> 0, setupPairs, triggerPair: structuredClone(goal.pair) };
+}
+
+export default { RULES, cloneBoard, findGroups, applyGravity, resolve, dropPair, transformChallenge, planChallenge };

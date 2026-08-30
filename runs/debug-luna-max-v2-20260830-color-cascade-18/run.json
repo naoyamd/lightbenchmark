@@ -1,0 +1,374 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-max-v2-20260830-color-cascade-18",
+  "cohortId": "debug-luna-max-v2-20260830",
+  "taskId": "color-cascade-18",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-30T05:31:30.035Z",
+    "endedAt": "2026-08-30T05:43:30.035Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720000,
+    "agentSteps": 19,
+    "toolCalls": 15,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "codexHomeIsolation": "auth-only-temporary-home",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720000,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 19,
+        "withinLimit": true
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [
+    {
+      "kind": "image",
+      "path": "artifacts/before.png",
+      "label": "browser smoke before"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/middle.png",
+      "label": "browser smoke middle"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/after.png",
+      "label": "browser smoke after"
+    }
+  ],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "PUYO-2.0",
+    "commonPrompt": "CODE-1.4",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1",
+    "fixture": "sealed-cohort-v1",
+    "replay": "chromium-cdp-v1"
+  },
+  "hashes": {
+    "prompt": "59524511d898bcce536ab5108db547ae645dda5d9c117e4ddd0e4c6cc6b1e712",
+    "starter": "6ef9956ec9bd291d3cff0a578ead983f343202a701da2b45b5e6ed0b9ef2854f",
+    "candidateSite": "0e1fb8a1daa0ad61c09323226728cccca26da1570ba7cc12979f14bdbec01c58",
+    "evaluator": "7c1db88a4d3f7ee8590f88de05009a60a1ac31ebaa2a387965b93c321fa739b3",
+    "evaluatorCommitment": "fec39be3f6ce17f8e9daaad0a4d1cb08e24834abc55bcae3b36122ac5d7d7f6a",
+    "fixture": "c3e367cbf76c98efbf370ce8540cc361d81fcc6f7079dca7cd937f5431424e72",
+    "cohortCommitment": "57067e8d2fc2af94aea93be551968b01c3ac09204ddc9ccd8e9dc10a77239878",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "replay": {
+      "schemaVersion": 1,
+      "taskId": "color-cascade-18",
+      "pass": true,
+      "api": [
+        "reset",
+        "runChallenge"
+      ],
+      "frameChanged": true,
+      "screenshotHashes": {
+        "before": "78b80b862970bfe4dfbaa05b0a545a6c60dc30a9e6ae694d355f69aad34cd96a",
+        "middle": "17d6b40b4c1f29ce7be6fc76ee8ee1180fedf1ff0af6103c8df93859fcb42332",
+        "after": "562a97bbd63c89ef26bf270bebe73526376719ca423a97ae1f5099b188a18e3d"
+      },
+      "result": {
+        "seed": 305419896,
+        "board": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "placedPairs": 36,
+        "chain": 18,
+        "chainCount": 18,
+        "clearCount": 72,
+        "waves": 18,
+        "status": "ALL CLEAR",
+        "phase": "done",
+        "solved": true,
+        "landed": true,
+        "next": null
+      },
+      "errors": []
+    },
+    "experience": {
+      "status": "unreviewed",
+      "checks": null,
+      "notes": "人手による視覚評価は未実施です"
+    },
+    "fixture": {
+      "sha256": "c3e367cbf76c98efbf370ce8540cc361d81fcc6f7079dca7cd937f5431424e72"
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。"
+    ],
+    "measurementFailures": [
+      "token usage was not reported",
+      "runner termination: timeout"
+    ],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "color-cascade-18",
+      "fixture": {
+        "sha256": "c3e367cbf76c98efbf370ce8540cc361d81fcc6f7079dca7cd937f5431424e72"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "public goal: 70 cells, 4 colors, gravity packed",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "falling pair creates exact 18 × 4 and all clear",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "candidate locks the displayed pair correctly",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "candidate challenge trace equals oracle",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "public seed planner builds 35 legal drops before 18-chain trigger",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "hidden seed planner (6 goals)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "seed changes the legal placement order",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "resolve differential (8 boards)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "dropPair differential (6 cases)",
+          "kind": "logic",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": true,
+      "robustnessPass": true,
+      "pass": true
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": true
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

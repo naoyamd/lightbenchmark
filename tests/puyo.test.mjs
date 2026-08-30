@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { RULES, applyGravity, dropPair, findGroups, resolve } from "../evaluator/puyo.mjs";
+import { RULES, applyGravity, dropPair, findGroups, planChallenge, resolve, transformChallenge } from "../evaluator/puyo.mjs";
 
 const fixture = JSON.parse(await readFile(new URL("../evaluator/fixtures/puyo-18.json", import.meta.url), "utf8"));
 const blank = () => Array.from({ length: RULES.height }, () => Array(RULES.width).fill(0));
@@ -79,7 +79,7 @@ test("dropPair locks each rotation and preserves its input", () => {
   assert.deepEqual(overflow.board, full);
 });
 
-test("puyo-18 fixture is y=0 stable and resolves to eighteen four-cell chains", () => {
+test("puyo-18 fixture is gravity-packed and resolves to eighteen four-cell chains", () => {
   assert.deepEqual(Object.keys(fixture), ["board"]);
   const board = fixture.board;
   assert.equal(board.length, RULES.height);
@@ -102,4 +102,30 @@ test("puyo-18 fixture is y=0 stable and resolves to eighteen four-cell chains", 
     Array.from({ length: 18 }, (_, index) => 68 - index * 4));
   assert.ok(result.steps.every((step) => step.groups.length === 1 && step.groups[0].cells.length === 4));
   assert.ok(result.finalBoard.flat().every((cell) => cell === 0));
+});
+
+test("seed planner legally builds transformed 18-chain goals", () => {
+  const goalBoard = structuredClone(fixture.board);
+  goalBoard[4][0] = 0;
+  goalBoard[5][0] = 0;
+  const base = { board: applyGravity(goalBoard), pair: { x: 0, rotation: 0, colors: [4, 3] } };
+  const signatures = new Set();
+  for (const seed of [0, 1, 2, 3]) {
+    const goal = transformChallenge(base, seed * 0x1020304);
+    const plan = planChallenge(goal, seed);
+    signatures.add(JSON.stringify(plan.setupPairs));
+    let board = blank();
+    for (const pair of plan.setupPairs) {
+      const dropped = dropPair(board, pair);
+      assert.equal(dropped.ok, true);
+      assert.equal(resolve(dropped.board).chainCount, 0);
+      board = dropped.board;
+    }
+    assert.deepEqual(board, goal.board);
+    const triggered = dropPair(board, plan.triggerPair);
+    const result = resolve(triggered.board);
+    assert.equal(result.chainCount, 18);
+    assert.ok(result.finalBoard.flat().every(cell => cell === 0));
+  }
+  assert.ok(signatures.size >= 3);
 });

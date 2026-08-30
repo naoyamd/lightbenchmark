@@ -18,8 +18,9 @@ test('raw chat helpers preserve text and sum reported usage', () => {
   assert.deepEqual(addUsage({ usage: { input_tokens: 1 } }), { inputTokens: 1, outputTokens: null, cachedTokens: null, reasoningTokens: null, totalTokens: null });
 });
 
-test('chat runner records a missing API key without fabricating a result', async () => {
+test('chat runner uses isolated Codex auth instead of an API key', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-chat-'));
+  const auth = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-chat-auth-'));
   const previousKey = process.env.OPENAI_API_KEY;
   try {
     delete process.env.OPENAI_API_KEY;
@@ -28,16 +29,20 @@ test('chat runner records a missing API key without fabricating a result', async
       writeFile(path.join(root, 'turn1.txt'), 'turn one'),
       writeFile(path.join(root, 'turn2.txt'), 'turn two'),
       writeFile(path.join(root, 'payload.json'), JSON.stringify({ sequence: [] })),
+      writeFile(path.join(auth, 'auth.json'), '{}'),
     ]);
-    await assert.rejects(() => runChat({ workspace: root }), /OPENAI_API_KEY is required/u);
+    await assert.rejects(() => runChat({ workspace: root, executable: 'lightbenchmark-missing-codex', codexHomeSource: auth }), /ENOENT|EPERM|not found/u);
     const metadata = JSON.parse(await readFile(path.join(root, 'chat-api-run.json'), 'utf8'));
     assert.equal(metadata.officialEligible, false);
+    assert.equal(metadata.harness, 'codex-cli-chat');
     assert.equal(metadata.terminationReason, 'harness-error');
     assert.equal(metadata.usage, null);
+    assert.doesNotMatch(metadata.error, /OPENAI_API_KEY/u);
   } finally {
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
     await rm(root, { recursive: true, force: true });
+    await rm(auth, { recursive: true, force: true });
   }
 });
 

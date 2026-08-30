@@ -9,10 +9,10 @@ import { benchmarkTaskIds, buildPromptPayload } from "../scripts/prompt-payload.
 const promptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../prompts");
 const publicV1 = {
   "color-cascade-18": {
-    version: "PUYO-1.5",
-    file: "color-cascade-18-v1.5.md",
-    sha256: "f71693c67c15fe896cd876d00ad4fe9d9f43869c7a9139832fe9f98ff3ccf400",
-    previousSha256: "a26b56a56c25b0c294d1cd3cea67145d6730469224c873470c041aa18c224af7",
+    version: "PUYO-2.0",
+    file: "color-cascade-18-v2.md",
+    sha256: "59524511d898bcce536ab5108db547ae645dda5d9c117e4ddd0e4c6cc6b1e712",
+    previousSha256: "f71693c67c15fe896cd876d00ad4fe9d9f43869c7a9139832fe9f98ff3ccf400",
   },
   "prism-twist": {
     version: "CUBE-1.4",
@@ -20,11 +20,11 @@ const publicV1 = {
     sha256: "51af3686d4130d75f20aba49748d8d206cf7bd6a276c17435ff020e82fd6b3e5",
     previousSha256: "0dc0b4f2482d8b215e88ecde02922a068bd64079e14a7cc22a4e26a86f28d854",
   },
-  "lander-pop": {
-    version: "LANDER-2.1",
-    file: "lander-pop-v2.1.md",
-    sha256: "98b854ebcfcaa008436a0c50697ca48b6d54820f30ced5d4315d88ad86dfa3c1",
-    previousSha256: "511d058755433024d4ca162c9ce21aa41a2d586a180c59b8228cbcd55d54b3aa",
+  "robot-arm-sort": {
+    version: "ARM-1.0",
+    file: "robot-arm-sort-v1.md",
+    sha256: "4d8a71585f88d62f56938e07567df9be74c5980c1b186ffd5fb27dbb05701988",
+    previousSha256: "98b854ebcfcaa008436a0c50697ca48b6d54820f30ced5d4315d88ad86dfa3c1",
   },
 };
 
@@ -43,8 +43,9 @@ test("all four frozen tasks produce ready-to-send message payloads", async () =>
     ))));
   }
   assert.equal((await buildPromptPayload("japanese-chat")).sequence.length, 2);
-  assert.match((await buildPromptPayload("color-cascade-18")).sequence[0].messages[0].content, /非zero cellは正確に70個[\s\S]*\[\[4,4,4,2,2,3\]/);
+  assert.match((await buildPromptPayload("color-cascade-18")).sequence[0].messages[0].content, /空盤面から2個組を35回[\s\S]*\[\[1,3,3,4,1,3\]/);
   assert.match((await buildPromptPayload("prism-twist")).sequence[0].messages[0].content, /隔離workspace[\s\S]*3×3 ルービックキューブ/);
+  assert.match((await buildPromptPayload("robot-arm-sort")).sequence[0].messages[0].content, /順運動学・逆運動学[\s\S]*衝突検査/);
 });
 
 test("coding public-v1 payloads use the frozen filenames and changed hashes", async () => {
@@ -66,5 +67,5 @@ test("coding public-v1 payloads use the frozen filenames and changed hashes", as
     assert.equal(sequenceHash(payload), expected.sha256);
     assert.notEqual(sequenceHash(payload), expected.previousSha256);
   }
-  assert.equal(sequenceHash(await buildPromptPayload("japanese-chat", promptsDir)), "4f9cb1e871360fddbfd22f521b6021a643d4feeb0fe75c56f61eedff9e7fb290");
+  assert.equal(sequenceHash(await buildPromptPayload("japanese-chat", promptsDir)), "e645387b2a403c07f6ee82d97af89575792cb6a032ade0ec03b12f963322b9ee");
 });

@@ -7,6 +7,8 @@ const files = taskId === 'lander-pop-controller'
   ? { controller: 'controller.mjs' }
   : taskId === 'lander-pop-sim'
     ? { sim: 'sim.mjs' }
+    : taskId === 'robot-arm-sort'
+      ? { arm: 'arm.mjs' }
     : { engine: 'engine.mjs' };
 
 const modules = {};

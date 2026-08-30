@@ -6,14 +6,21 @@ import { fileURLToPath } from "node:url";
 import * as cubeOracle from "../evaluator/cube.mjs";
 import * as puyoOracle from "../evaluator/puyo.mjs";
 import * as rocketOracle from "../evaluator/rocket.mjs";
+import * as armOracle from "../evaluator/arm.mjs";
 
 const scriptFile = fileURLToPath(import.meta.url);
 const candidateWorkerFile = fileURLToPath(new URL("./candidate-worker.mjs", import.meta.url));
-const TASKS = new Set(["color-cascade-18", "prism-twist", "lander-pop"]);
+const TASKS = new Set(["color-cascade-18", "prism-twist", "robot-arm-sort"]);
 const CANDIDATE_TIMEOUT_MS = 30_000;
 
 const defaultFixtures = {
   "color-cascade-18": {
+    planCases: [
+      { goalSeed: 0x10203040, planSeed: 1 },
+      { goalSeed: 0x31415926, planSeed: 2 },
+      { goalSeed: 0x89abcdef, planSeed: 3 },
+      { goalSeed: 0xffffffff, planSeed: 4 },
+    ],
     boards: [
       [
         [1, 1, 1, 1, 2, 2],
@@ -36,6 +43,10 @@ const defaultFixtures = {
       ["R", "U", "R'", "U'"],
       ["F2", "D", "L'", "B", "U2", "R"],
     ],
+  },
+  "robot-arm-sort": {
+    scenarios: [0x10203040, 0x31415926, 0x89abcdef, 0xffffffff]
+      .map((seed, index) => ({ id: `scenario-${index + 1}`, ...armOracle.createScenario(seed) })),
   },
   "lander-pop": {
     scenarios: [
@@ -302,10 +313,13 @@ function validChallengeBoard(board, cellCount) {
 
 export async function evaluatePuyoModule(candidate, challenge, fixture = defaultFixtures["color-cascade-18"]) {
   const checks = [];
-  checks.push(await check("required exports", "logic", () => requireFunctions(candidate, ["dropPair", "resolve"])));
-  const board = challenge?.board;
-  const pair = challenge?.pair;
-  checks.push(await check("challenge shape: 70 cells, 4 colors, gravity packed", "headline", () => validChallengeBoard(board, 70)));
+  checks.push(await check("required exports", "logic", () => requireFunctions(candidate, ["dropPair", "resolve", "planChallenge"])));
+  const goal = challenge?.goal;
+  const board = goal?.board;
+  const pair = goal?.pair;
+  checks.push(await check("public goal: 70 cells, 4 colors, gravity packed", "headline", () => (
+    Number.isInteger(challenge?.seed) && validChallengeBoard(board, 70)
+  )));
 
   let dropped;
   let reference;
@@ -324,6 +338,42 @@ export async function evaluatePuyoModule(candidate, challenge, fixture = default
   checks.push(await check("candidate challenge trace equals oracle", "logic", async () => (
     same(await candidate.resolve(clone(dropped.board)), reference)
   )));
+
+  const replayPlan = async (planGoal, seed) => {
+    const first = await candidate.planChallenge(clone(planGoal), seed);
+    const second = await candidate.planChallenge(clone(planGoal), seed);
+    if (!same(first, second) || !Array.isArray(first?.setupPairs) || first.setupPairs.length !== 35
+      || !same(first.triggerPair, planGoal.pair)) return false;
+    let current = Array.from({ length: 14 }, () => Array(6).fill(0));
+    for (const setupPair of first.setupPairs) {
+      const next = puyoOracle.dropPair(current, setupPair);
+      if (!next.ok || puyoOracle.resolve(next.board).chainCount !== 0) return false;
+      current = next.board;
+    }
+    if (!same(current, planGoal.board)) return false;
+    const trigger = puyoOracle.dropPair(current, first.triggerPair);
+    if (!trigger.ok) return false;
+    const result = puyoOracle.resolve(trigger.board);
+    return result.chainCount === 18 && result.steps.every((step) => step.cleared.length === 4)
+      && result.finalBoard.flat().every((cell) => cell === 0);
+  };
+  checks.push(await check("public seed planner builds 35 legal drops before 18-chain trigger", "headline", async () => (
+    replayPlan(goal, challenge.seed)
+  )));
+  checks.push(await check(`hidden seed planner (${fixture.planCases?.length ?? 0} goals)`, "robustness", async () => {
+    for (const { goalSeed, planSeed } of fixture.planCases ?? []) {
+      if (!await replayPlan(puyoOracle.transformChallenge(goal, goalSeed), planSeed)) return false;
+    }
+    return true;
+  }));
+  checks.push(await check("seed changes the legal placement order", "robustness", async () => {
+    const signatures = new Set();
+    for (const seed of [0, 1, 2, 3]) {
+      const plan = await candidate.planChallenge(clone(goal), seed);
+      signatures.add(JSON.stringify(plan?.setupPairs));
+    }
+    return signatures.size >= 3;
+  }));
 
   const variants = validChallengeBoard(dropped?.board, 72) ? [
     dropped.board.map((row) => row.toReversed()),
@@ -400,6 +450,46 @@ export async function evaluateCubeModule(candidate, fixture = defaultFixtures["p
     return threw && same(Array.from(state), before);
   }));
   return summarize("prism-twist", fixture, checks);
+}
+
+export async function evaluateArmModule(candidate, fixture = defaultFixtures["robot-arm-sort"]) {
+  const checks = [];
+  checks.push(await check("required exports", "logic", () => requireFunctions(candidate, ["forward", "inverse", "planSort"])));
+  const spec = clone(armOracle.SPEC);
+  const joints = [[0.2, 0.4], [1.1, -1.2], [2.2, 0.7], [-0.6, 1.5]];
+  checks.push(await check(`forward kinematics (${joints.length} cases)`, "logic", async () => {
+    for (const value of joints) {
+      if (!same(await candidate.forward(clone(value), clone(spec)), armOracle.forward(value, spec), 1e-8)) return false;
+    }
+    return true;
+  }));
+  const targets = [[190, 45], [-185, 55], [150, 100], [-155, 95]];
+  checks.push(await check(`inverse kinematics (${targets.length * 2} branches)`, "logic", async () => {
+    for (const target of targets) for (const elbow of ["up", "down"]) {
+      const expected = armOracle.inverse(target, spec, elbow);
+      const actual = await candidate.inverse(clone(target), clone(spec), elbow);
+      if (expected === null ? actual !== null : !same(armOracle.forward(actual, spec).tool, target, 1e-7)) return false;
+    }
+    return true;
+  }));
+  const scenarios = fixture.scenarios ?? [];
+  const simulations = [];
+  checks.push(await check(`deterministic collision-free sort (${scenarios.length} scenarios)`, "robustness", async () => {
+    for (const scenario of scenarios) {
+      const first = await candidate.planSort(clone(scenario));
+      const second = await candidate.planSort(clone(scenario));
+      if (!same(first, second)) return false;
+      const simulation = armOracle.simulatePlan(scenario, first);
+      simulations.push({ id: scenario.id ?? null, ...simulation });
+      if (!simulation.pass) return false;
+    }
+    return true;
+  }));
+  checks.push(await check("all parcels are physically picked and placed", "headline", () => (
+    scenarios.length > 0 && simulations.length === scenarios.length
+      && simulations.every((result, index) => result.sorted.length === scenarios[index].items.length)
+  )));
+  return summarize("robot-arm-sort", fixture, checks, { simulations });
 }
 
 function rocketPhysicsCases(count = 180) {
@@ -528,6 +618,11 @@ export async function evaluateSubmission(taskId, submissionDirectory, fixtureFil
       const client = await startCandidateClient(taskId, submissionDirectory);
       clients.push(client);
       return await evaluateCubeModule(client.module("engine"), fixture);
+    }
+    if (taskId === "robot-arm-sort") {
+      const client = await startCandidateClient(taskId, submissionDirectory);
+      clients.push(client);
+      return await evaluateArmModule(client.module("arm"), fixture);
     }
     if (await controllerImportsSimulation(submissionDirectory)) {
       return summarize("lander-pop", fixture, [{

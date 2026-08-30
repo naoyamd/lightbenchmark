@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot Arm Sort</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #071019; }
+    body { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+    [data-lightbench-stage] {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      min-height: 420px;
+      overflow: hidden;
+      background: #08131d;
+      isolation: isolate;
+    }
+    #cell { display: block; width: 100%; height: 100%; }
+    .hud {
+      position: absolute;
+      z-index: 2;
+      top: clamp(16px, 3vw, 30px);
+      left: clamp(16px, 3vw, 34px);
+      display: flex;
+      gap: 1px;
+      padding: 7px;
+      border: 1px solid rgba(147, 198, 217, .22);
+      border-radius: 9px;
+      background: rgba(7, 16, 25, .78);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .24);
+      backdrop-filter: blur(9px);
+    }
+    .readout { min-width: 74px; padding: 4px 10px 5px; border-right: 1px solid rgba(147, 198, 217, .14); }
+    .readout:last-child { border-right: 0; }
+    .readout span { display: block; color: #7693a0; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+    .readout strong { display: block; margin-top: 4px; color: #dbeaf0; font-size: 13px; font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
+    #status[data-mode="sorting"] { color: #7dd8e7; }
+    #status[data-mode="complete"] { color: #7df0b1; }
+    #status[data-mode="fault"] { color: #ff6d74; }
+    @media (max-width: 670px) {
+      .hud { right: 12px; left: 12px; justify-content: space-between; }
+      .readout { min-width: 0; padding-inline: 6px; }
+      .readout strong { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <main data-lightbench-stage>
+    <canvas id="cell" aria-label="Automated robot arm sorting cell"></canvas>
+    <div class="hud" aria-live="polite">
+      <div class="readout"><span>Status</span><strong id="status">READY</strong></div>
+      <div class="readout"><span>Moved</span><strong id="moved">0 / 3</strong></div>
+      <div class="readout"><span>q1</span><strong id="q1">+1.571</strong></div>
+      <div class="readout"><span>q2</span><strong id="q2">+0.000</strong></div>
+      <div class="readout"><span>Grip</span><strong id="grip">OPEN</strong></div>
+    </div>
+  </main>
+  <script type="module">
+    import { forward, planSort } from "./arm.mjs";
+
+    const canvas = document.querySelector("#cell");
+    const context = canvas.getContext("2d");
+    const statusValue = document.querySelector("#status");
+    const movedValue = document.querySelector("#moved");
+    const q1Value = document.querySelector("#q1");
+    const q2Value = document.querySelector("#q2");
+    const gripValue = document.querySelector("#grip");
+
+    const state = {
+      scenario: null,
+      plan: [],
+      joints: [Math.PI / 2, 0],
+      grip: false,
+      carried: null,
+      items: [],
+      delivered: [],
+      eventLog: [],
+      status: "ready",
+      fault: null,
+      cursor: 0,
+      virtualTime: 0,
+      raf: 0,
+      generation: 0,
+      activeResolve: null,
+      playbackStart: 0,
+    };
+    let pixelRatio = 1;
+    let width = 1;
+    let height = 1;
+    let scale = 1;
+    let originX = 0;
+    let originY = 0;
+
+    const colorMap = {
+      cyan: { main: "#35d7e5", dark: "#0e8f9e", pale: "#b9fbff" },
+      magenta: { main: "#ef5cae", dark: "#a32c70", pale: "#ffd0e8" },
+      yellow: { main: "#f5d34c", dark: "#b18b20", pale: "#fff4ad" },
+    };
+    const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
+    const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const clonePoint = point => [point[0], point[1]];
+
+    function resize() {
+      const box = canvas.getBoundingClientRect();
+      pixelRatio = Math.min(2, window.devicePixelRatio || 1);
+      width = Math.max(1, box.width);
+      height = Math.max(1, box.height);
+      canvas.width = Math.round(width * pixelRatio);
+      canvas.height = Math.round(height * pixelRatio);
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      scale = Math.min(width / 690, height / 365);
+      originX = width * .5;
+      originY = height * .81;
+      render();
+    }
+    window.addEventListener("resize", resize, { passive: true });
+
+    function sx(x) { return originX + x * scale; }
+    function sy(y) { return originY - y * scale; }
+    function point(point) { return [sx(point[0]), sy(point[1])]; }
+    function roundRect(ctx, x, y, w, h, r) {
+      const radius = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + w, y, x + w, y + h, radius);
+      ctx.arcTo(x + w, y + h, x, y + h, radius);
+      ctx.arcTo(x, y + h, x, y, radius);
+      ctx.arcTo(x, y, x + w, y, radius);
+      ctx.closePath();
+    }
+
+    function displayNumber(value) {
+      const sign = value >= 0 ? "+" : "";
+      return `${sign}${value.toFixed(3)}`;
+    }
+
+    function updateHud() {
+      const total = state.items.length;
+      statusValue.textContent = state.status.toUpperCase();
+      statusValue.dataset.mode = state.status;
+      movedValue.textContent = `${state.delivered.length} / ${total}`;
+      q1Value.textContent = displayNumber(state.joints[0]);
+      q2Value.textContent = displayNumber(state.joints[1]);
+      gripValue.textContent = state.grip ? "CLOSED" : "OPEN";
+    }
+
+    function drawBackground() {
+      const gradient = context.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, "#0b1b27");
+      gradient.addColorStop(.68, "#091722");
+      gradient.addColorStop(1, "#061019");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, width, height);
+
+      context.save();
+      context.globalAlpha = .23;
+      context.strokeStyle = "#3c6977";
+      context.lineWidth = 1;
+      for (let x = -330; x <= 330; x += 30) {
+        context.beginPath(); context.moveTo(sx(x), sy(0)); context.lineTo(sx(x), sy(315)); context.stroke();
+      }
+      for (let y = 0; y <= 315; y += 30) {
+        context.beginPath(); context.moveTo(sx(-330), sy(y)); context.lineTo(sx(330), sy(y)); context.stroke();
+      }
+      context.restore();
+
+      context.fillStyle = "#0e222d";
+      context.fillRect(0, sy(0), width, height - sy(0));
+      context.fillStyle = "#152f38";
+      context.fillRect(0, sy(0) - 4, width, 4);
+      context.fillStyle = "#2b5860";
+      context.fillRect(0, sy(0) - 5, width, 1);
+      context.save();
+      context.globalAlpha = .45;
+      context.strokeStyle = "#4b7277";
+      context.lineWidth = 1;
+      for (let x = -330; x < 330; x += 52) {
+        context.beginPath(); context.moveTo(sx(x), sy(0) + 15); context.lineTo(sx(x + 24), sy(0) + 15); context.stroke();
+      }
+      context.restore();
+    }
+
+    function drawBin(item, index) {
+      const colors = colorMap[item.color] || colorMap.cyan;
+      const p = point(item.target);
+      const radius = Math.max(22, (state.scenario.spec.binRadius + 8) * scale);
+      const landed = state.delivered.includes(item.id);
+      context.save();
+      context.translate(p[0], p[1]);
+      context.shadowColor = landed ? colors.main : "transparent";
+      context.shadowBlur = landed ? 22 : 0;
+      context.fillStyle = landed ? `${colors.dark}cc` : "#122832";
+      context.strokeStyle = landed ? colors.main : `${colors.main}99`;
+      context.lineWidth = 2;
+      context.beginPath(); context.arc(0, 0, radius, 0, Math.PI * 2); context.fill(); context.stroke();
+      context.shadowBlur = 0;
+      context.strokeStyle = `${colors.main}66`;
+      context.lineWidth = 1;
+      context.beginPath(); context.arc(0, 0, radius * .68, 0, Math.PI * 2); context.stroke();
+      context.fillStyle = colors.main;
+      context.globalAlpha = .18;
+      context.beginPath(); context.arc(0, 0, radius * .42, 0, Math.PI * 2); context.fill();
+      context.globalAlpha = 1;
+      context.fillStyle = colors.pale;
+      context.font = `600 ${Math.max(10, 11 * scale)}px ui-monospace, monospace`;
+      context.textAlign = "center"; context.textBaseline = "middle";
+      context.fillText(item.color.slice(0, 1).toUpperCase(), 0, 0);
+      context.restore();
+      // A small floor marker ties the bin to its target without adding dashboard text.
+      context.save();
+      context.strokeStyle = `${colors.main}55`;
+      context.setLineDash([3, 5]);
+      context.beginPath(); context.moveTo(p[0], sy(0)); context.lineTo(p[0], p[1] + radius + 4); context.stroke();
+      context.restore();
+    }
+
+    function drawObstacle(obstacle) {
+      const left = sx(obstacle.minX);
+      const top = sy(obstacle.maxY);
+      const w = (obstacle.maxX - obstacle.minX) * scale;
+      const h = (obstacle.maxY - obstacle.minY) * scale;
+      const safe = (state.scenario.spec.clearance + 5) * scale;
+      context.save();
+      context.fillStyle = "rgba(232, 89, 71, .08)";
+      context.strokeStyle = "rgba(236, 129, 89, .32)";
+      context.setLineDash([5, 5]);
+      roundRect(context, left - safe, top - safe, w + safe * 2, h + safe * 2, 5);
+      context.fill(); context.stroke();
+      context.setLineDash([]);
+      context.fillStyle = "#3a2630";
+      context.strokeStyle = "#d8665f";
+      context.lineWidth = 2;
+      roundRect(context, left, top, w, h, 4); context.fill(); context.stroke();
+      context.globalAlpha = .55;
+      context.strokeStyle = "#f0a06b";
+      context.lineWidth = 2;
+      for (let x = left - h; x < left + w + h; x += 13) {
+        context.beginPath(); context.moveTo(x, top + h); context.lineTo(x + h, top); context.stroke();
+      }
+      context.restore();
+    }
+
+    function drawItem(item) {
+      if (item.carried || item.delivered) return;
+      const colors = colorMap[item.color] || colorMap.cyan;
+      const p = point(item.position);
+      const size = 16 * scale;
+      context.save();
+      context.translate(p[0], p[1]);
+      context.shadowColor = colors.main; context.shadowBlur = 13;
+      context.fillStyle = colors.dark;
+      context.strokeStyle = colors.pale;
+      context.lineWidth = 1.5;
+      roundRect(context, -size / 2, -size / 2, size, size, 3); context.fill(); context.stroke();
+      context.shadowBlur = 0;
+      context.strokeStyle = `${colors.pale}99`;
+      context.beginPath(); context.moveTo(-size * .25, -size * .25); context.lineTo(size * .25, size * .25); context.stroke();
+      context.beginPath(); context.moveTo(size * .25, -size * .25); context.lineTo(-size * .25, size * .25); context.stroke();
+      context.restore();
+    }
+
+    function drawArm(pose) {
+      const base = point(state.scenario.spec.base);
+      const elbow = point(pose.elbow);
+      const tool = point(pose.tool);
+      const colors = state.status === "fault" ? { link: "#ed5964", joint: "#ffabb0" } : { link: "#6bb7c3", joint: "#c6f4ef" };
+      context.save();
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.shadowColor = "rgba(0,0,0,.55)";
+      context.shadowBlur = 15;
+      context.strokeStyle = "#02070b";
+      context.lineWidth = 28 * scale;
+      context.beginPath(); context.moveTo(base[0], base[1]); context.lineTo(elbow[0], elbow[1]); context.lineTo(tool[0], tool[1]); context.stroke();
+      context.shadowBlur = 0;
+      context.strokeStyle = colors.link;
+      context.lineWidth = 20 * scale;
+      context.beginPath(); context.moveTo(base[0], base[1]); context.lineTo(elbow[0], elbow[1]); context.lineTo(tool[0], tool[1]); context.stroke();
+      context.strokeStyle = state.status === "fault" ? "#ff858e" : "#b8e6e1";
+      context.globalAlpha = .43;
+      context.lineWidth = 5 * scale;
+      context.beginPath(); context.moveTo(base[0], base[1]); context.lineTo(elbow[0], elbow[1]); context.lineTo(tool[0], tool[1]); context.stroke();
+      context.globalAlpha = 1;
+      for (const [x, y, radius] of [[base[0], base[1], 22], [elbow[0], elbow[1], 15], [tool[0], tool[1], 11]]) {
+        context.fillStyle = "#09151b";
+        context.strokeStyle = colors.joint;
+        context.lineWidth = 3 * scale;
+        context.beginPath(); context.arc(x, y, radius * scale, 0, Math.PI * 2); context.fill(); context.stroke();
+        context.fillStyle = colors.link;
+        context.beginPath(); context.arc(x, y, radius * .35 * scale, 0, Math.PI * 2); context.fill();
+      }
+
+      const angle = state.joints[0] + state.joints[1];
+      const ux = Math.cos(angle); const uy = Math.sin(angle);
+      const vx = -uy; const vy = ux;
+      const gap = state.grip ? 7 : 13;
+      const length = 17;
+      context.strokeStyle = state.grip ? "#f2f8e8" : "#d2e6e4";
+      context.lineWidth = 5 * scale;
+      context.lineCap = "round";
+      for (const side of [-1, 1]) {
+        const start = [tool[0] + vx * side * gap * scale, tool[1] - vy * side * gap * scale];
+        const end = [start[0] + ux * length * scale, start[1] - uy * length * scale];
+        context.beginPath(); context.moveTo(start[0], start[1]); context.lineTo(end[0], end[1]); context.stroke();
+      }
+      context.restore();
+    }
+
+    function render() {
+      if (!state.scenario) return;
+      drawBackground();
+      for (const item of state.items) drawBin(item, 0);
+      for (const obstacle of state.scenario.obstacles || []) drawObstacle(obstacle);
+      for (const item of state.items) drawItem(item);
+      const pose = forward(state.joints, state.scenario.spec);
+      if (state.carried) {
+        const item = state.items.find(candidate => candidate.id === state.carried);
+        if (item) {
+          item.position = clonePoint(pose.tool);
+          drawItem({ ...item, carried: false, delivered: false });
+        }
+      }
+      drawArm(pose);
+      if (state.status === "complete") {
+        const base = point(state.scenario.spec.base);
+        context.save();
+        context.strokeStyle = "rgba(125, 240, 177, .35)";
+        context.lineWidth = 2;
+        context.beginPath(); context.arc(base[0], base[1], 36 * scale, Math.PI, Math.PI * 2); context.stroke();
+        context.restore();
+      }
+      if (state.status === "fault") {
+        context.save();
+        context.fillStyle = "rgba(169, 27, 42, .13)";
+        context.fillRect(0, 0, width, height);
+        context.strokeStyle = "rgba(255, 94, 104, .7)";
+        context.lineWidth = 2;
+        context.strokeRect(10, 10, width - 20, height - 20);
+        context.restore();
+      }
+      updateHud();
+    }
+
+    // The runtime uses the same geometric tests as the planner, with no display-derived state.
+    function segmentTouchesRect(a, b, rect) {
+      let t0 = 0; let t1 = 1;
+      const dx = b[0] - a[0]; const dy = b[1] - a[1];
+      for (const [p, q] of [[-dx, a[0] - rect.minX], [dx, rect.maxX - a[0]], [-dy, a[1] - rect.minY], [dy, rect.maxY - a[1]]]) {
+        if (Math.abs(p) < 1e-9) { if (q < 0) return false; continue; }
+        const r = q / p;
+        if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+        else { if (r < t0) return false; if (r < t1) t1 = r; }
+      }
+      return t0 <= t1 + 1e-8 && t1 >= -1e-8 && t0 <= 1 + 1e-8;
+    }
+    function safePose(joints, carrying) {
+      const spec = state.scenario.spec;
+      if (joints.some((value, index) => value < spec.jointLimits[index][0] - 1e-7 || value > spec.jointLimits[index][1] + 1e-7)) return false;
+      const pose = forward(joints, spec);
+      if (pose.elbow[1] < spec.clearance - 1e-7 || pose.tool[1] < spec.clearance - 1e-7) return false;
+      const pad = spec.clearance + (carrying ? 5 : 0) + 1e-7;
+      for (const obstacle of state.scenario.obstacles || []) {
+        const rect = { minX: obstacle.minX - pad, maxX: obstacle.maxX + pad, minY: obstacle.minY - pad, maxY: obstacle.maxY + pad };
+        if (segmentTouchesRect(spec.base, pose.elbow, rect) || segmentTouchesRect(pose.elbow, pose.tool, rect)) return false;
+      }
+      return true;
+    }
+
+    function cloneEvent(event) {
+      return { ...event, joints: event.joints.slice(), tool: event.tool.slice() };
+    }
+    function snapshot() {
+      return {
+        status: state.status,
+        transported: state.delivered.length,
+        landed: state.delivered.length === state.items.length && state.items.length > 0,
+        solved: state.delivered.length === state.items.length && !state.grip && !state.carried,
+        q1: state.joints[0],
+        q2: state.joints[1],
+        joints: state.joints.slice(),
+        grip: state.grip,
+        carried: state.carried,
+        eventCount: state.eventLog.length,
+        items: state.items.map(item => ({ id: item.id, position: item.position.slice(), carried: item.carried, delivered: item.delivered })),
+      };
+    }
+    function log() { return state.eventLog.map(cloneEvent); }
+
+    function fault(reason) {
+      if (state.status === "fault") return;
+      state.status = "fault";
+      state.fault = reason;
+      if (state.raf) cancelAnimationFrame(state.raf);
+      state.raf = 0;
+      render();
+      if (state.activeResolve) { const resolve = state.activeResolve; state.activeResolve = null; resolve(snapshot()); }
+    }
+
+    function applyGrip(nextGrip) {
+      if (state.grip === nextGrip) return true;
+      const pose = forward(state.joints, state.scenario.spec);
+      if (!state.grip && nextGrip) {
+        const available = state.items.filter(item => !item.delivered && !item.carried && distance(item.position, pose.tool) <= state.scenario.spec.gripRadius + 1e-7);
+        if (available.length !== 1) { fault("grip"); return false; }
+        const item = available[0];
+        item.carried = true;
+        state.carried = item.id;
+        state.grip = true;
+        state.eventLog.push({ type: "pickup", id: item.id, joints: state.joints.slice(), tool: pose.tool.slice() });
+        return true;
+      }
+      if (state.grip && !nextGrip) {
+        const item = state.items.find(candidate => candidate.id === state.carried);
+        if (!item || distance(item.target, pose.tool) > state.scenario.spec.binRadius + 1e-7) { fault("drop"); return false; }
+        item.carried = false;
+        item.delivered = true;
+        item.position = item.target.slice();
+        state.delivered.push(item.id);
+        state.eventLog.push({ type: "drop", id: item.id, joints: state.joints.slice(), tool: pose.tool.slice() });
+        state.carried = null;
+        state.grip = false;
+        return true;
+      }
+      return true;
+    }
+
+    function setFrame(frame) {
+      state.joints = frame.joints.slice();
+      if (!safePose(state.joints, state.grip)) { fault("collision"); return false; }
+      if (!applyGrip(frame.grip)) return false;
+      return true;
+    }
+
+    function frameAt(time) {
+      const frames = state.plan;
+      while (state.cursor + 1 < frames.length && time >= frames[state.cursor + 1].t - 1e-9) {
+        state.cursor += 1;
+        if (!setFrame(frames[state.cursor])) return false;
+      }
+      const current = frames[state.cursor];
+      const next = frames[Math.min(state.cursor + 1, frames.length - 1)];
+      if (next && next !== current && time < next.t) {
+        const ratio = clamp((time - current.t) / (next.t - current.t), 0, 1);
+        state.joints = [
+          current.joints[0] + (next.joints[0] - current.joints[0]) * ratio,
+          current.joints[1] + (next.joints[1] - current.joints[1]) * ratio,
+        ];
+        if (!safePose(state.joints, state.grip)) { fault("collision"); return false; }
+      }
+      return true;
+    }
+
+    function finishRun() {
+      state.cursor = state.plan.length - 1;
+      state.joints = state.plan.at(-1).joints.slice();
+      state.grip = state.plan.at(-1).grip;
+      if (state.delivered.length === state.items.length && !state.grip && !state.carried) state.status = "complete";
+      else if (state.status !== "fault") state.status = "fault";
+      render();
+      const resolve = state.activeResolve;
+      state.activeResolve = null;
+      if (resolve) resolve(snapshot());
+    }
+
+    function animationFrame(now, token) {
+      if (token !== state.generation || state.status === "fault") return;
+      const elapsed = Math.max(0, now - state.playbackStart) / 52;
+      state.virtualTime = elapsed;
+      if (!frameAt(elapsed)) return;
+      render();
+      if (elapsed >= state.plan.at(-1).t) { finishRun(); return; }
+      state.raf = requestAnimationFrame(next => animationFrame(next, token));
+    }
+
+    function reset() {
+      state.generation += 1;
+      if (state.raf) cancelAnimationFrame(state.raf);
+      state.raf = 0;
+      if (state.activeResolve) { const resolve = state.activeResolve; state.activeResolve = null; resolve(snapshot()); }
+      if (!state.plan.length) state.plan = planSort(state.scenario);
+      state.joints = state.scenario.spec.home.slice();
+      state.grip = false;
+      state.carried = null;
+      state.items = state.scenario.items.map(item => ({ id: item.id, color: item.color, pickup: item.pickup.slice(), target: item.target.slice(), position: item.pickup.slice(), carried: false, delivered: false }));
+      state.delivered = [];
+      state.eventLog = [];
+      state.status = "ready";
+      state.fault = null;
+      state.cursor = 0;
+      state.virtualTime = 0;
+      render();
+      return snapshot();
+    }
+
+    function run() {
+      if (state.status === "complete") return Promise.resolve(snapshot());
+      if (state.activeResolve) return new Promise(resolve => {
+        const previous = state.activeResolve;
+        state.activeResolve = result => { previous(result); resolve(result); };
+      });
+      state.status = "sorting";
+      const token = ++state.generation;
+      state.playbackStart = performance.now();
+      render();
+      return new Promise(resolve => {
+        state.activeResolve = resolve;
+        state.raf = requestAnimationFrame(now => animationFrame(now, token));
+      });
+    }
+
+    async function boot() {
+      const response = await fetch("./scenario.json", { cache: "no-store" });
+      state.scenario = await response.json();
+      state.plan = planSort(state.scenario);
+      resize();
+      reset();
+      window.__LIGHTBENCH__ = { reset, run, snapshot, log };
+    }
+    boot().catch(error => {
+      state.status = "fault";
+      state.fault = "load";
+      statusValue.textContent = "FAULT";
+      console.error(error);
+    });
+  </script>
+</body>
+</html>

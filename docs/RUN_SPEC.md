@@ -20,7 +20,7 @@ rootはsubagent数に含めない。model表示名・provider・正確なmodel I
 
 subagentの`spawned`だけをrunnerが確実に観測できたdebug runでは、`completed`、`failed`、`maxConcurrent`、`items`を`null`にしてよい。推測値を埋めない。official runでは従来どおり全項目を必須とする。
 
-statusは`pass`、`partial`、`candidate-fail`、`infra-error`、`inconclusive`のいずれか。実行laneは`autonomous`または`assisted`とする。正式runでは時刻とdurationを必須とし、相互差は1秒以内に一致させる。Coding課題の`execution.isolation`は`isolated-candidate-workspace`として、候補へbenchmark repository、oracle、参照実装、過去出力を読ませない。閉本chatは`tools-disabled-api`とする。ローカルrepoと同じhostで走らせたagent試行は`same-host-debug`であり、debug runだけに使える。debug runだけは計測欠落を`null`で公開できる。
+statusは`pass`、`partial`、`candidate-fail`、`infra-error`、`inconclusive`のいずれか。実行laneは`autonomous`または`assisted`とする。正式runでは時刻とdurationを必須とし、相互差は1秒以内に一致させる。Coding課題の`execution.isolation`は`isolated-candidate-workspace`として、候補へbenchmark repository、oracle、参照実装、過去出力を読ませない。正式な閉本chatは`tools-disabled-api`とする。ローカルCodex CLI chatはtool eventを拒否しても`same-host-debug`であり、debug runだけに使える。debug runだけは計測欠落を`null`で公開できる。
 
 ローカルCodex debug runnerも候補をrepo外の使い捨てdirectoryと、認証情報だけを持つ一時`CODEX_HOME`で実行し、prompt、公開test、提出先以外をstageしない。JSONLに評価器、評価harness、非公開testへの参照痕跡があれば`execution.benchmarkRepositoryExposure`へ、global AGENTSやユーザーskillへの参照痕跡があれば`execution.externalContextExposure`へ記録し、必ずcomparability blockerにする。この措置は誤露出を防ぐためのもので、同一host runを正式隔離へ昇格させるものではない。
 

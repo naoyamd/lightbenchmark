@@ -10,7 +10,7 @@ const scriptFile = fileURLToPath(import.meta.url);
 const actions = {
   'color-cascade-18': ['reset', 'runChallenge'],
   'prism-twist': ['reset', 'scramble', 'play'],
-  'lander-pop': ['reset', 'run'],
+  'robot-arm-sort': ['reset', 'run'],
 };
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -109,10 +109,15 @@ async function stopBrowser(child) {
   await Promise.race([closed, delay(5_000)]);
 }
 
-const timeout = (promise, ms, label) => Promise.race([
-  promise,
-  new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out`)), ms)),
-]);
+const timeout = (promise, ms, label) => {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+};
 
 async function smokeAttempt(taskId, siteDirectory, { artifactsDir = null } = {}) {
   if (!actions[taskId]) throw new Error(`unknown task: ${taskId}`);
@@ -173,7 +178,9 @@ async function smokeAttempt(taskId, siteDirectory, { artifactsDir = null } = {})
   } finally {
     client?.close();
     await stopBrowser(child);
-    await new Promise(resolve => server.close(resolve));
+    const closed = new Promise(resolve => server.close(resolve));
+    server.closeAllConnections?.();
+    await timeout(closed, 2_000, 'HTTP server shutdown').catch(() => server.closeAllConnections?.());
     await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 }
@@ -192,7 +199,7 @@ function parseArgs(args) {
   if (!taskId) {
     siteDirectory = 'submission/site';
     taskId = requireStat(path.join(siteDirectory, 'challenge.json')) ? 'color-cascade-18'
-      : requireStat(path.join(siteDirectory, 'controller.mjs')) ? 'lander-pop'
+      : requireStat(path.join(siteDirectory, 'arm.mjs')) ? 'robot-arm-sort'
         : requireStat(path.join(siteDirectory, 'engine.mjs')) ? 'prism-twist' : null;
   }
   if (!taskId || !siteDirectory) throw new Error('Usage: node showcase-smoke.mjs [<task-id> <submission/site>] [--artifacts-dir PATH] [--output FILE]');

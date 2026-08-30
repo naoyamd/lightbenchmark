@@ -2,10 +2,10 @@
 
 LightBenchmarkは、小規模なAIモデルを「見て面白い」「成功・失敗が一目で分かる」4課題で比較する静的ベンチマークです。
 
-- 6つの観光知識を閉本で正誤判定し、公式Fact Cardを渡した後に訂正する日本語チャット
-- 18連鎖して全消しする、丸い色ぷよの落ちものゲーム
+- 8つのご当地知識を閉本で正誤判定し、Fact Cardを渡した後に訂正する日本語チャット
+- 空盤面から配置を計画し、18連鎖して全消しする丸い色ぷよの落ちものゲーム
 - 標準6色の3×3ルービックキューブ
-- センサー履歴から速度を推定し、風・突風・抗力・アクチュエータ遅れの中で自動制御する垂直着陸toy simulation
+- 順運動学・逆運動学・障害物回避・把持を行う2リンクロボットアーム仕分け
 
 単一の総合点は作りません。課題達成、ロジック、未知入力への頑健性、見やすさ、token・費用・時間・サブエージェント使用量を別々に公開します。
 
@@ -48,20 +48,21 @@ npm run dev
 5. `docs/RUN_SPEC.md`に従って`runs/<run-id>/run.json`と任意のshowcaseを追加する。`runs/_example`のような`_`始まりの補助ディレクトリは公開ビルドから除外される。
 6. `npm run check`後、`main`へ反映するとGitHub Pagesが更新される。
 
-チャット課題はtoolをAPIへ渡さず、検索・groundingを無効にしたfresh conversationで2ターン実行します。検索を無効化できないproviderは閉本結果と別cohortにしてください。
+チャット課題は検索・groundingなしのfresh conversationで2ターン実行します。検索を無効化できないproviderは閉本結果と別cohortにしてください。
 
-OpenAIのチャット課題は`OPENAI_API_KEY`を環境変数だけで渡し、次でsystem/user role、tools 0件、時刻、usageを自動記録できます。実装課題のローカルCodex laneはprompt・公開テスト・空の提出先だけをrepo外の使い捨てdirectoryへ移してJSONLと12分timeoutを保存します。それでも同一host実行なので`same-host-debug`であり、正式結果には使えません。
+ローカルdebugではチャットも実装課題もCodexログイン認証を一時`CODEX_HOME`へ隔離して使います。チャットはread-onlyの空workspaceで同一sessionをresumeし、JSONLにtool callが1件でも出たら失敗にします。CLIではsystem/user roleがResponses APIと完全同値ではないため、これは`same-host-debug`であり正式結果には使えません。実装課題はprompt・公開テスト・空の提出先だけをrepo外の使い捨てdirectoryへ移し、JSONLと12分timeoutを保存します。
 
 ```powershell
 npm run run:chat -- work/<run-id>/japanese-chat --model gpt-5.6-luna --effort max
 npm run run:codex -- work/<run-id>/prism-twist --model gpt-5.6-luna --effort max
+npm run run:codex -- work/<run-id>/robot-arm-sort --model gpt-5.6-luna --effort max
 npm run smoke -- prism-twist work/<run-id>/prism-twist/submission/site
 npm run finalize:debug -- work/<run-id>/prism-twist --run-id debug-<attempt>-prism-twist --cohort-id debug-<attempt>
 ```
 
-Codex runnerはJSONLを実行中から逐次保存し、中断しても開始時刻と観測済み件数を残します。`OPENAI_API_KEY`がないchat実行も、別harnessへすり替えず失敗metadataを残します。debug finalizerは既存runを上書きせず、封印済みhashを再照合して候補、fixture、browser smoke、評価、usageをappend-only recordへ確定します。評価器・評価harness・非公開testの参照痕跡は比較不能理由として記録します。
+Codex runnerはJSONLを実行中から逐次保存し、中断しても開始時刻と観測済み件数を残します。debug finalizerは既存runを上書きせず、封印済みhashを再照合して候補、fixture、browser smoke、評価、usageをappend-only recordへ確定します。評価器・評価harness・非公開testの参照痕跡は比較不能理由として記録します。
 
-Coding課題の候補moduleは、必ずnetworkを切った使い捨て環境で評価します。CLIはfixtureとoracleを持つ信頼済み親processから、候補をNode permission model付きの別processで呼び出します。候補processが読めるのは提出directoryと公開RPC workerだけで、Lander Popのsimとcontrollerも別processです。環境変数は外側のnetwork隔離を運用者が確認したことを示す誤実行防止gateです。
+Coding課題の候補moduleは、必ずnetworkを切った使い捨て環境で評価します。CLIはfixtureとoracleを持つ信頼済み親processから、候補をNode permission model付きの別processで呼び出します。候補processが読めるのは提出directoryと公開RPC workerだけです。環境変数は外側のnetwork隔離を運用者が確認したことを示す誤実行防止gateです。
 
 ```powershell
 $env:LIGHTBENCH_ISOLATED = "1"
@@ -78,14 +79,14 @@ npm run evaluate -- prism-twist C:\isolated\submission\site C:\sealed\fixture.js
 - rootとsubagentのusageを分け、合計時に二重計上しません。
 - 人手修正や再指示は`assisted`として別表示します。
 - 新しいモデルを公開後に追加する場合は、新しいhidden fixtureを持つ別cohortにします。
-- モデルページは同一cohortだけを使い、欠けた課題を過去cohortから補完しません。
+- モデルページは各課題の最新runを使い、cohortが混在する場合はカードごとに採用cohortを明示します。
 - ハーネス調整中のrunは`runKind: debug`かつ`status: inconclusive`とし、正式結果へ混ぜません。
 - live showcaseはUTF-8のHTML/CSS/JavaScript/JSON、合計2 MiB以下に限定し、CSP、path traversal、symlink、外部通信、worker、入れ子frameを拒否します。
 - live showcaseは初期状態を同時に表示できますが、実行は1件だけです。別課題の実行時は前の課題を初期状態へ戻します。デモのmessageや成功演出はscoreへ反映しません。
 
 ## 権利・安全
 
-課題として認識できる定番の盤面・配色・操作は必須ですが、公式logo、既存ゲームの画像・音声・固有キャラクターは使いません。Lander Popは教育用toy simulationであり、実機制御用途ではありません。
+課題として認識できる定番の盤面・配色・操作は必須ですが、公式logo、既存ゲームの画像・音声・固有キャラクターは使いません。
 
 ## License
 

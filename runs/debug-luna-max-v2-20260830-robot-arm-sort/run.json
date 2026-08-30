@@ -1,0 +1,441 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-max-v2-20260830-robot-arm-sort",
+  "cohortId": "debug-luna-max-v2-20260830",
+  "taskId": "robot-arm-sort",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-30T05:54:07.628Z",
+    "endedAt": "2026-08-30T06:06:07.628Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720000,
+    "agentSteps": 17,
+    "toolCalls": 12,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "codexHomeIsolation": "auth-only-temporary-home",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720000,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 17,
+        "withinLimit": true
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [
+    {
+      "kind": "image",
+      "path": "artifacts/before.png",
+      "label": "browser smoke before"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/middle.png",
+      "label": "browser smoke middle"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/after.png",
+      "label": "browser smoke after"
+    }
+  ],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "ARM-1.0",
+    "commonPrompt": "CODE-1.4",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1",
+    "fixture": "sealed-cohort-v1",
+    "replay": "chromium-cdp-v1"
+  },
+  "hashes": {
+    "prompt": "4d8a71585f88d62f56938e07567df9be74c5980c1b186ffd5fb27dbb05701988",
+    "starter": "008a1ab521247870081225e5a3563b2671cb125eee43b90d4b1d1eb554644eb8",
+    "candidateSite": "e9b324cdca29e1389c7f94c2f80d3579155872f0597b136b93abb7c78712884d",
+    "evaluator": "7c1db88a4d3f7ee8590f88de05009a60a1ac31ebaa2a387965b93c321fa739b3",
+    "evaluatorCommitment": "555d195c1ee4739fcaa9bbdf0e6bcfaec81a6fe734504c52c9d4f10e08d9614a",
+    "fixture": "99b1b967217e7d96cfacd49d09f9d40afecf1df353e18037f02fc2fd8168c426",
+    "cohortCommitment": "57067e8d2fc2af94aea93be551968b01c3ac09204ddc9ccd8e9dc10a77239878",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "replay": {
+      "schemaVersion": 1,
+      "taskId": "robot-arm-sort",
+      "pass": true,
+      "api": [
+        "reset",
+        "run"
+      ],
+      "frameChanged": true,
+      "screenshotHashes": {
+        "before": "b501e8d56e2cbd9343b029526af2a936b923fd5e5151027cfa533d9b40d1bd64",
+        "middle": "49e191d6f910e825d74513abc08da9ea22dabe762911a89dec2b41a149026322",
+        "after": "ba95483752ccd448355e69738ba058d611498a00845699f7e479fafa1a1b1fad"
+      },
+      "result": {
+        "status": "complete",
+        "transported": 3,
+        "landed": true,
+        "solved": true,
+        "q1": 0.9586743480622314,
+        "q2": -1.0150757809908442,
+        "joints": [
+          0.9586743480622314,
+          -1.0150757809908442
+        ],
+        "grip": false,
+        "carried": null,
+        "eventCount": 6,
+        "items": [
+          {
+            "id": "cyan",
+            "position": [
+              186,
+              48
+            ],
+            "carried": false,
+            "delivered": true
+          },
+          {
+            "id": "magenta",
+            "position": [
+              160,
+              94
+            ],
+            "carried": false,
+            "delivered": true
+          },
+          {
+            "id": "yellow",
+            "position": [
+              206,
+              116
+            ],
+            "carried": false,
+            "delivered": true
+          }
+        ]
+      },
+      "errors": []
+    },
+    "experience": {
+      "status": "unreviewed",
+      "checks": null,
+      "notes": "人手による視覚評価は未実施です"
+    },
+    "fixture": {
+      "sha256": "99b1b967217e7d96cfacd49d09f9d40afecf1df353e18037f02fc2fd8168c426"
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。"
+    ],
+    "measurementFailures": [
+      "token usage was not reported",
+      "runner termination: timeout"
+    ],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "robot-arm-sort",
+      "fixture": {
+        "sha256": "99b1b967217e7d96cfacd49d09f9d40afecf1df353e18037f02fc2fd8168c426"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "forward kinematics (4 cases)",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "inverse kinematics (8 branches)",
+          "kind": "logic",
+          "pass": false,
+          "detail": "result did not match the reference"
+        },
+        {
+          "name": "deterministic collision-free sort (4 scenarios)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "all parcels are physically picked and placed",
+          "kind": "headline",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": false,
+      "robustnessPass": true,
+      "pass": false,
+      "simulations": [
+        {
+          "id": "scenario-1",
+          "pass": true,
+          "sorted": [
+            "cyan",
+            "magenta",
+            "yellow"
+          ],
+          "events": [
+            {
+              "type": "pick",
+              "id": "cyan",
+              "t": 1.0801604834755203
+            },
+            {
+              "type": "place",
+              "id": "cyan",
+              "t": 4.1909125852830265
+            },
+            {
+              "type": "pick",
+              "id": "magenta",
+              "t": 7.2506055886270016
+            },
+            {
+              "type": "place",
+              "id": "magenta",
+              "t": 10.095618895556449
+            },
+            {
+              "type": "pick",
+              "id": "yellow",
+              "t": 12.508142876026824
+            },
+            {
+              "type": "place",
+              "id": "yellow",
+              "t": 15.44813378708101
+            }
+          ],
+          "duration": 15.44813378708101,
+          "errors": []
+        },
+        {
+          "id": "scenario-2",
+          "pass": true,
+          "sorted": [
+            "cyan",
+            "magenta",
+            "yellow"
+          ],
+          "events": [
+            {
+              "type": "pick",
+              "id": "cyan",
+              "t": 1.0871976511965977
+            },
+            {
+              "type": "place",
+              "id": "cyan",
+              "t": 4.213330085605699
+            },
+            {
+              "type": "pick",
+              "id": "magenta",
+              "t": 7.3089694779654435
+            },
+            {
+              "type": "place",
+              "id": "magenta",
+              "t": 10.199450155411812
+            },
+            {
+              "type": "pick",
+              "id": "yellow",
+              "t": 12.622535195357449
+            },
+            {
+              "type": "place",
+              "id": "yellow",
+              "t": 15.52818422888325
+            }
+          ],
+          "duration": 15.52818422888325,
+          "errors": []
+        },
+        {
+          "id": "scenario-3",
+          "pass": true,
+          "sorted": [
+            "cyan",
+            "magenta",
+            "yellow"
+          ],
+          "events": [
+            {
+              "type": "pick",
+              "id": "cyan",
+              "t": 1.0837717101917486
+            },
+            {
+              "type": "place",
+              "id": "cyan",
+              "t": 4.195361708327753
+            },
+            {
+              "type": "pick",
+              "id": "magenta",
+              "t": 7.291599397998561
+            },
+            {
+              "type": "place",
+              "id": "magenta",
+              "t": 10.166758347278204
+            },
+            {
+              "type": "pick",
+              "id": "yellow",
+              "t": 12.587945065605167
+            },
+            {
+              "type": "place",
+              "id": "yellow",
+              "t": 15.542688791983325
+            }
+          ],
+          "duration": 15.542688791983325,
+          "errors": []
+        },
+        {
+          "id": "scenario-4",
+          "pass": true,
+          "sorted": [
+            "cyan",
+            "magenta",
+            "yellow"
+          ],
+          "events": [
+            {
+              "type": "pick",
+              "id": "cyan",
+              "t": 1.0467654619709537
+            },
+            {
+              "type": "place",
+              "id": "cyan",
+              "t": 4.139682237251921
+            },
+            {
+              "type": "pick",
+              "id": "magenta",
+              "t": 7.2163672753151165
+            },
+            {
+              "type": "place",
+              "id": "magenta",
+              "t": 10.086197218135373
+            },
+            {
+              "type": "pick",
+              "id": "yellow",
+              "t": 12.497549958568344
+            },
+            {
+              "type": "place",
+              "id": "yellow",
+              "t": 15.378988422571936
+            }
+          ],
+          "duration": 15.378988422571936,
+          "errors": []
+        }
+      ]
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": false
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

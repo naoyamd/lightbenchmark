@@ -96,7 +96,7 @@ describe('site build', () => {
     assert.equal(JSON.parse(output)[0].model.pageUrl, './models/test-model-1/');
     const app = await readFile(path.join(root, 'dist', 'app.js'), 'utf8');
     for (const label of ['モデル', '合計トークン', 'サブエージェント', '実行時間', 'コスト']) assert.match(app, new RegExp(label));
-    for (const label of ['ぷよぷよ風・18連鎖全消し', '3×3 ルービックキューブ', 'ロケット垂直着陸']) assert.match(app, new RegExp(label));
+    for (const label of ['ぷよぷよ風・18連鎖全消し', '3×3 ルービックキューブ', '2リンク・ロボットアーム仕分け']) assert.match(app, new RegExp(label));
     assert.match(app, /artifactGallery/);
     assert.match(app, /ビジュアル未収録/);
     assert.match(app, /evaluation\?\.showcase\?\.reason/);
@@ -158,7 +158,7 @@ describe('site build', () => {
     assert.match(app, /for \(const action of plan\.prepare\)/);
     assert.match(app, /for \(const action of plan\.run\)/);
     assert.doesNotMatch(app, /allow-same-origin/);
-    for (const label of ['18連鎖を実行', 'キューブを解く', '自動着陸を実行']) assert.match(app, new RegExp(label));
+    for (const label of ['18連鎖を実行', 'キューブを解く', '自動仕分けを実行']) assert.match(app, new RegExp(label));
     assert.match(app, /停止する/);
     assert.match(app, /mountModelShowcases/);
     assert.match(app, /mountShowcase\(run, container\)/);

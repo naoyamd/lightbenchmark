@@ -3,8 +3,8 @@ import { pathToFileURL } from "node:url";
 
 const segmenter = new Intl.Segmenter("ja", { granularity: "grapheme" });
 const emoji = /\p{Extended_Pictographic}/u;
-const IDS = ["S1", "S2", "S3", "S4", "S5", "S6"];
-const EXPECTED_LABELS = Object.freeze({ S1: "誤", S2: "正", S3: "正", S4: "誤", S5: "正", S6: "誤" });
+const IDS = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"];
+const EXPECTED_LABELS = Object.freeze({ S1: "誤", S2: "正", S3: "正", S4: "誤", S5: "正", S6: "誤", S7: "正", S8: "誤" });
 
 export function graphemeLength(text) {
   return [...segmenter.segment(text.trim())].length;
@@ -16,7 +16,7 @@ export function emojiCount(text) {
 
 function extractLabels(text) {
   return Object.fromEntries(IDS.map((id) => {
-    const match = text.match(new RegExp(`(?:^|\\n)\\s*${id}\\s*[:：は]?\\s*(正|誤)(?=\\s|[—―ー:：、，,。.!！？()（）]|$)`, "mu"));
+    const match = text.match(new RegExp(`(?:^|\\n)\\s*${id}\\s*[:：は]?\\s*[（(]?(正|誤)[）)]?(?=\\s|[—―ー:：、，,。.!！？()（）]|$)`, "mu"));
     return [id, match?.[1] ?? null];
   }));
 }
@@ -30,8 +30,10 @@ const correctionChecks = Object.freeze({
   S2: /厳島神社[\s\S]{0,35}宮島[\s\S]{0,35}廿日市市|宮島[\s\S]{0,35}廿日市市/u,
   S3: /松本城[\s\S]{0,35}(現存天守[\s\S]{0,12})?国宝/u,
   S4: /(最小|いちばん小さい)[\s\S]{0,35}香川県/u,
-  S5: /琵琶湖[\s\S]{0,35}(自然流出|流出)[\s\S]{0,20}瀬田川/u,
+  S5: /琵琶湖[\s\S]{0,45}(自然流出|自然に流れ出る|自然に流出|流出)[\s\S]{0,30}瀬田川/u,
   S6: /青森ねぶた[\s\S]{0,45}弘前ねぷた[\s\S]{0,35}(別の祭|別祭|同じではない|異なる祭|別々)/u,
+  S7: /(東経135度|標準時子午線)[\s\S]{0,35}(兵庫県)?明石市/u,
+  S8: /浜名湖[\s\S]{0,35}(汽水湖|海水と淡水)/u,
 });
 
 function correctionResults(text) {
@@ -53,7 +55,7 @@ export function evaluateTurn1(text) {
   const labels = extractLabels(normalized);
   const checks = labelChecks(labels);
   const truthPass = Object.values(checks).every(Boolean);
-  const format = formatResult(normalized, { minChars: 180, maxChars: 420, minEmoji: 2, maxEmoji: 6 });
+  const format = formatResult(normalized, { minChars: 240, maxChars: 560, minEmoji: 2, maxEmoji: 6 });
   return {
     labels,
     expectedLabels: EXPECTED_LABELS,
@@ -74,15 +76,15 @@ export function evaluateTurn2(text) {
   const labels = extractLabels(body);
   const labelResults = labelChecks(labels);
   const corrections = correctionResults(body);
-  const factIds = [...new Set(selfCheck.match(/F[1-6]/gu) ?? [])].sort();
-  const correctionIds = [...new Set(selfCheck.match(/S[1-6]/gu) ?? [])].sort();
-  const format = formatResult(body, { minChars: 160, maxChars: 420, minEmoji: 1, maxEmoji: 4 });
+  const factIds = [...new Set(selfCheck.match(/F[1-8]/gu) ?? [])].sort();
+  const correctionIds = [...new Set(selfCheck.match(/S[1-8]/gu) ?? [])].sort();
+  const format = formatResult(body, { minChars: 220, maxChars: 560, minEmoji: 1, maxEmoji: 4 });
   const checks = {
     structure: Boolean(match),
     truthLabels: Object.values(labelResults).every(Boolean),
     corrections: Object.values(corrections).every(Boolean),
     factIds: IDS.every((_, index) => factIds.includes(`F${index + 1}`)),
-    correctionAudit: /訂正(?:・確認)?\s*:/u.test(selfCheck) && ["S1", "S4", "S6"].every((id) => correctionIds.includes(id)),
+    correctionAudit: /訂正(?:・確認)?\s*:/u.test(selfCheck) && ["S1", "S4", "S6", "S8"].every((id) => correctionIds.includes(id)),
   };
   return {
     body,

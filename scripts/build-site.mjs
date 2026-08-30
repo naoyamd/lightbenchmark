@@ -550,7 +550,7 @@ function bridgeScript(taskId) {
   const actions = {
     'color-cascade-18': ['reset', 'runChallenge'],
     'prism-twist': ['reset', 'scramble', 'play'],
-    'lander-pop': ['reset', 'run']
+    'robot-arm-sort': ['reset', 'run']
   }[taskId] || [];
   const bytes = new Uint8Array(16);
   if (globalThis.crypto && crypto.getRandomValues) crypto.getRandomValues(bytes);
