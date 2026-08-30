@@ -158,7 +158,6 @@ h1 span { display: block; color: var(--accent); }
   .task-heading-meta { grid-column: 2; justify-items: start; }
   .primary-verdict { justify-items: start; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
-  .showcase-visual { height: 18rem; }
   .showcase-controls { align-items: stretch; flex-direction: column; }
   .showcase-button { width: 100%; }
   .record-actions { align-items: stretch; flex-direction: column; }
