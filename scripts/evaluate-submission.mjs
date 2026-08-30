@@ -47,7 +47,7 @@ const defaultFixtures = {
       { seed: 0xcafebabe, overrides: { g: 9.4, aMax: 23.5, windAmp: 0.4, padX: 10, padHalf: 5.5, fuel0: 0.75 } },
       { seed: 0x0badf00d, overrides: { dragCoeff: 0.01, gustAmp: 0.2 } },
       { seed: 0xffffffff, overrides: { g: 10.2, dragCoeff: 0.01, padX: -8 } },
-    ],
+    ].map(({ seed, overrides }, index) => ({ id: `scenario-${index + 1}`, ...rocketOracle.createScenario(seed, overrides) })),
   },
 };
 
@@ -285,9 +285,9 @@ function summarize(taskId, fixture, checks, extra = {}) {
   };
 }
 
-function validChallengeBoard(board) {
+function validChallengeBoard(board, cellCount) {
   if (!Array.isArray(board) || board.length !== 14 || board.some((row) => !Array.isArray(row) || row.length !== 6)) return false;
-  if (board.flat().filter(Boolean).length !== 72) return false;
+  if (board.flat().filter(Boolean).length !== cellCount) return false;
   if (!same([...new Set(board.flat().filter(Boolean))].sort(), [1, 2, 3, 4])) return false;
   if (board.flat().some((cell) => !Number.isInteger(cell) || cell < 0 || cell > 4)) return false;
   for (let x = 0; x < 6; x += 1) {
@@ -304,23 +304,30 @@ export async function evaluatePuyoModule(candidate, challenge, fixture = default
   const checks = [];
   checks.push(await check("required exports", "logic", () => requireFunctions(candidate, ["dropPair", "resolve"])));
   const board = challenge?.board;
-  checks.push(await check("challenge shape: 72 cells, 4 colors, gravity packed", "headline", () => validChallengeBoard(board)));
+  const pair = challenge?.pair;
+  checks.push(await check("challenge shape: 70 cells, 4 colors, gravity packed", "headline", () => validChallengeBoard(board, 70)));
 
+  let dropped;
   let reference;
-  checks.push(await check("reference oracle: exact 18 × 4 and all clear", "headline", () => {
-    reference = puyoOracle.resolve(board);
+  checks.push(await check("falling pair creates exact 18 × 4 and all clear", "headline", () => {
+    dropped = puyoOracle.dropPair(board, pair);
+    if (!dropped.ok || !validChallengeBoard(dropped.board, 72)) return false;
+    reference = puyoOracle.resolve(dropped.board);
     return reference.chainCount === 18
       && reference.steps.length === 18
       && reference.steps.every((step) => step.cleared.length === 4)
       && reference.finalBoard.flat().every((cell) => cell === 0);
   }));
+  checks.push(await check("candidate locks the displayed pair correctly", "logic", async () => (
+    same(await candidate.dropPair(clone(board), clone(pair)), dropped)
+  )));
   checks.push(await check("candidate challenge trace equals oracle", "logic", async () => (
-    same(await candidate.resolve(clone(board)), reference)
+    same(await candidate.resolve(clone(dropped.board)), reference)
   )));
 
-  const variants = validChallengeBoard(board) ? [
-    board.map((row) => row.toReversed()),
-    board.map((row) => row.map((cell) => [0, 2, 3, 4, 1][cell])),
+  const variants = validChallengeBoard(dropped?.board, 72) ? [
+    dropped.board.map((row) => row.toReversed()),
+    dropped.board.map((row) => row.map((cell) => [0, 2, 3, 4, 1][cell])),
   ] : [];
   const boards = [...(fixture.boards ?? []), ...variants];
   checks.push(await check(`resolve differential (${boards.length} boards)`, "robustness", async () => {
@@ -343,6 +350,13 @@ export async function evaluateCubeModule(candidate, fixture = defaultFixtures["p
   const required = ["createSolved", "applyMove", "applyAlgorithm", "invertAlgorithm", "isSolved", "generateScramble", "serialize"];
   checks.push(await check("required exports", "logic", () => requireFunctions(candidate, required)));
   checks.push(await check("solved representation", "logic", async () => same(await candidate.createSolved(), cubeOracle.createSolved())));
+  checks.push(await check("canonical serialization", "logic", async () => {
+    const states = [cubeOracle.createSolved(), ...((fixture.algorithms ?? []).map(algorithm => cubeOracle.applyAlgorithm(cubeOracle.createSolved(), algorithm)))];
+    for (const state of states) {
+      if (await candidate.serialize(state) !== cubeOracle.serialize(state)) return false;
+    }
+    return true;
+  }));
   checks.push(await check(`deterministic scramble (${fixture.seeds?.length ?? 0} seeds)`, "robustness", async () => {
     for (const { seed, length } of fixture.seeds ?? []) {
       if (!same(await candidate.generateScramble(seed, length), cubeOracle.generateScramble(seed, length))) return false;
@@ -431,16 +445,10 @@ function landingDiagnostics(state, params) {
 export async function evaluateRocketModules(sim, controller, fixture = defaultFixtures["lander-pop"]) {
   const checks = [];
   checks.push(await check("required exports", "logic", () => {
-    requireFunctions(sim, ["createScenario", "stepPhysics", "makeSensor", "classify"]);
+    requireFunctions(sim, ["stepPhysics", "makeSensor", "classify"]);
     requireFunctions(controller, ["createController"]);
   }));
   const scenarios = fixture.scenarios ?? [];
-  checks.push(await check(`scenario generation (${scenarios.length} seeds)`, "logic", async () => {
-    for (const { seed, overrides = {} } of scenarios) {
-      if (!same(await sim.createScenario(seed, overrides), rocketOracle.createScenario(seed, overrides), 1e-10)) return false;
-    }
-    return true;
-  }));
   const physics = fixture.physics ?? rocketPhysicsCases();
   checks.push(await check(`physics differential (${physics.length} steps)`, "robustness", async () => {
     for (const { state, control, params } of physics) {
@@ -470,7 +478,8 @@ export async function evaluateRocketModules(sim, controller, fixture = defaultFi
   const landings = [];
   for (const scenario of scenarios) {
     try {
-      const { state: initial, params: scenarioParams } = rocketOracle.createScenario(scenario.seed, scenario.overrides ?? {});
+      const initial = clone(scenario.state);
+      const scenarioParams = clone(scenario.params);
       const autopilot = await controller.createController();
       let state = initial;
       let status = rocketOracle.classify(state, scenarioParams);
@@ -481,9 +490,9 @@ export async function evaluateRocketModules(sim, controller, fixture = defaultFi
           status = rocketOracle.classify(state, scenarioParams);
         }
       }
-      landings.push({ seed: scenario.seed, status, ...landingDiagnostics(state, scenarioParams) });
+      landings.push({ id: scenario.id ?? null, status, ...landingDiagnostics(state, scenarioParams) });
     } catch (error) {
-      landings.push({ seed: scenario.seed, status: "controller-error", error: error instanceof Error ? error.message : String(error) });
+      landings.push({ id: scenario.id ?? null, status: "controller-error", error: error instanceof Error ? error.message : String(error) });
     }
   }
   const requiredLandings = scenarios.length <= 1 ? scenarios.length : Math.ceil(scenarios.length * 0.8);

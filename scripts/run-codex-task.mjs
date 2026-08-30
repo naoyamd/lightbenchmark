@@ -12,7 +12,7 @@ export async function createCandidateWorkspace(source) {
   const target = await mkdtemp(path.join(tmpdir(), 'lightbenchmark-candidate-'));
   try {
     await mkdir(path.join(target, 'submission', 'site'), { recursive: true });
-    await Promise.all(['prompt.txt', 'public-tests.mjs'].map(file => cp(path.join(source, file), path.join(target, file))));
+    await Promise.all(['prompt.txt', 'public-tests.mjs', 'showcase-smoke.mjs'].map(file => cp(path.join(source, file), path.join(target, file))));
     return target;
   } catch (error) {
     await rm(target, { recursive: true, force: true });
@@ -209,7 +209,7 @@ export async function runCodexTask({ workspace, model = 'gpt-5.6-luna', effort =
     result = await runCapturedProcess({
       executable, args, cwd: candidateRoot, input: prompt, timeoutMs, stdoutFile: eventFile, stderrFile,
       onStdoutLine: line => consumeCodexLine(stats, line), startedAt,
-      env: { ...process.env, CODEX_HOME: isolatedCodexHome },
+      env: { ...process.env, CODEX_HOME: isolatedCodexHome, LIGHTBENCH_CANDIDATE_RUN: '1' },
     });
   } catch (error) {
     processError = error;

@@ -2,7 +2,7 @@
 
 LightBenchmarkは、小規模なAIモデルを「見て面白い」「成功・失敗が一目で分かる」4課題で比較する静的ベンチマークです。
 
-- 閉本の日本語チャットと、公式情報を渡した後の訂正
+- 6つの観光知識を閉本で正誤判定し、公式Fact Cardを渡した後に訂正する日本語チャット
 - 18連鎖して全消しする、丸い色ぷよの落ちものゲーム
 - 標準6色の3×3ルービックキューブ
 - センサー履歴から速度を推定し、風・突風・抗力・アクチュエータ遅れの中で自動制御する垂直着陸toy simulation
@@ -18,7 +18,7 @@ LightBenchmarkは、小規模なAIモデルを「見て面白い」「成功・�
 - `web/` — 結果サイトの静的source
 - `scripts/build-site.mjs` — run検証と`dist/`生成
 
-候補のHTML/CSS/JavaScriptは評価とは分離した観察用showcaseとして公開できます。モデル専用ページを開くと3つのlive showcaseを初期状態まで`sandbox="allow-scripts"`のopaque-origin iframeへ描画し、外側の課題ボタンで1件ずつ実行します。成功判定は候補画面ではなく独立評価器のJSONだけを正とします。
+候補のHTML/CSS/JavaScriptは評価とは分離した観察用showcaseとして公開できます。モデル専用ページでは同じcohortの4課題を2×2で並べ、3つのlive showcaseを`sandbox="allow-scripts"`のopaque-origin iframeへ描画します。外側の課題ボタンで動かせるのは1件ずつです。主判定は候補画面ではなくtop-level run status、副評価は独立評価器のJSONだけを正とします。
 
 ## 必要環境
 
@@ -42,9 +42,9 @@ npm run dev
 ## ベンチマーク実行
 
 1. `npm run prompt -- <task-id>`でroleとturnを含む完成payloadを取り出し、`npm run hash:prompts`で実際のmessage sequenceのSHA-256を記録する。
-2. `npm run prepare -- work/<fresh-run-id>`でfresh bundleを作り、対象task directoryだけをbenchmark repositoryやoracleが存在しない使い捨てVM/containerへ転送する。
+2. `npm run prepare -- work/<fresh-run-id>`でfresh bundleを作り、prompt・evaluator・cohort固有fixtureのhashを実行前に封印する。対象task directoryだけをbenchmark repositoryやoracleが存在しない使い捨てVM/containerへ転送する。
 3. その隔離環境でnetworkなし、12分hard timeout、24 agent step、出力20,000 token、0.25 USD上限としてCoding Agentを1回実行する。runnerが強制できない上限は`observed-only`と記録し、hard制限として扱わない。
-4. 候補artifactを隔離環境で公開テストと非公開oracleへ通す。非公開fixtureは信頼済み親processだけが読み、候補は権限制限した別processで実行する。fixtureは公開repositoryや候補workspaceへ置かない。
+4. 候補artifactを公開テスト、権限制限した別processの非公開oracle、fresh Chromiumのbrowser smokeへ通す。fixtureは候補workspaceへ置かず、cohortの4実行が閉じるまで公開しない。
 5. `docs/RUN_SPEC.md`に従って`runs/<run-id>/run.json`と任意のshowcaseを追加する。`runs/_example`のような`_`始まりの補助ディレクトリは公開ビルドから除外される。
 6. `npm run check`後、`main`へ反映するとGitHub Pagesが更新される。
 
@@ -55,10 +55,11 @@ OpenAIのチャット課題は`OPENAI_API_KEY`を環境変数だけで渡し、�
 ```powershell
 npm run run:chat -- work/<run-id>/japanese-chat --model gpt-5.6-luna --effort max
 npm run run:codex -- work/<run-id>/prism-twist --model gpt-5.6-luna --effort max
+npm run smoke -- prism-twist work/<run-id>/prism-twist/submission/site
 npm run finalize:debug -- work/<run-id>/prism-twist --run-id debug-<attempt>-prism-twist --cohort-id debug-<attempt>
 ```
 
-Codex runnerはJSONLを実行中から逐次保存し、中断しても開始時刻と観測済み件数を残します。`OPENAI_API_KEY`がないchat実行も、別harnessへすり替えず失敗metadataを残します。debug finalizerは既存runを上書きせず、候補、hash、評価、usageを新しいappend-only recordへ確定し、評価器・評価harness・非公開testの参照痕跡があれば比較不能理由として記録します。
+Codex runnerはJSONLを実行中から逐次保存し、中断しても開始時刻と観測済み件数を残します。`OPENAI_API_KEY`がないchat実行も、別harnessへすり替えず失敗metadataを残します。debug finalizerは既存runを上書きせず、封印済みhashを再照合して候補、fixture、browser smoke、評価、usageをappend-only recordへ確定します。評価器・評価harness・非公開testの参照痕跡は比較不能理由として記録します。
 
 Coding課題の候補moduleは、必ずnetworkを切った使い捨て環境で評価します。CLIはfixtureとoracleを持つ信頼済み親processから、候補をNode permission model付きの別processで呼び出します。候補processが読めるのは提出directoryと公開RPC workerだけで、Lander Popのsimとcontrollerも別processです。環境変数は外側のnetwork隔離を運用者が確認したことを示す誤実行防止gateです。
 
@@ -77,6 +78,7 @@ npm run evaluate -- prism-twist C:\isolated\submission\site C:\sealed\fixture.js
 - rootとsubagentのusageを分け、合計時に二重計上しません。
 - 人手修正や再指示は`assisted`として別表示します。
 - 新しいモデルを公開後に追加する場合は、新しいhidden fixtureを持つ別cohortにします。
+- モデルページは同一cohortだけを使い、欠けた課題を過去cohortから補完しません。
 - ハーネス調整中のrunは`runKind: debug`かつ`status: inconclusive`とし、正式結果へ混ぜません。
 - live showcaseはUTF-8のHTML/CSS/JavaScript/JSON、合計2 MiB以下に限定し、CSP、path traversal、symlink、外部通信、worker、入れ子frameを拒否します。
 - live showcaseは初期状態を同時に表示できますが、実行は1件だけです。別課題の実行時は前の課題を初期状態へ戻します。デモのmessageや成功演出はscoreへ反映しません。

@@ -16,6 +16,7 @@
     "prompt": "node scripts/prompt-payload.mjs",
     "run:chat": "node scripts/run-chat-openai.mjs",
     "run:codex": "node scripts/run-codex-task.mjs",
+    "smoke": "node scripts/showcase-smoke.mjs",
     "test": "node --test --test-isolation=none",
     "check": "node --test --test-isolation=none && node scripts/build-site.mjs"
   }

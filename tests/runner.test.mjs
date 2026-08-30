@@ -125,10 +125,11 @@ test('candidate workspace excludes the benchmark repository', async () => {
       mkdir(path.join(root, 'submission', 'site'), { recursive: true }),
       writeFile(path.join(root, 'prompt.txt'), 'prompt'),
       writeFile(path.join(root, 'public-tests.mjs'), '// public'),
+      writeFile(path.join(root, 'showcase-smoke.mjs'), '// smoke'),
       writeFile(path.join(root, 'evaluate-submission.mjs'), '// private'),
     ]);
     candidate = await createCandidateWorkspace(root);
-    assert.deepEqual((await readdir(candidate)).sort(), ['prompt.txt', 'public-tests.mjs', 'submission']);
+    assert.deepEqual((await readdir(candidate)).sort(), ['prompt.txt', 'public-tests.mjs', 'showcase-smoke.mjs', 'submission']);
     assert.equal(await lstat(path.join(candidate, 'evaluate-submission.mjs')).catch(() => null), null);
   } finally {
     if (candidate) await rm(candidate, { recursive: true, force: true });
@@ -163,13 +164,22 @@ test('debug finalizer creates an append-only live showcase record', async () => 
   try {
     const payload = await buildPromptPayload('prism-twist');
     const promptHash = createHash('sha256').update(JSON.stringify(payload.sequence)).digest('hex');
-    await Promise.all([mkdir(site, { recursive: true }), mkdir(runsDir)]);
+    const fixture = { seeds: [{ seed: 0, length: 25 }], algorithms: [["R", "U", "R'", "U'"]] };
+    const fixtureHash = createHash('sha256').update(JSON.stringify(fixture)).digest('hex');
+    const evaluatorFiles = ['scripts/evaluate-submission.mjs', 'evaluator/cube.mjs'];
+    const evaluatorBytes = await Promise.all([
+      readFile(new URL('../scripts/evaluate-submission.mjs', import.meta.url)),
+      readFile(new URL('../evaluator/cube.mjs', import.meta.url)),
+    ]);
+    const evaluatorHash = createHash('sha256').update(evaluatorBytes.map((bytes, index) => `${evaluatorFiles[index]}\0${createHash('sha256').update(bytes).digest('hex')}`).join('\n')).digest('hex');
+    await Promise.all([mkdir(site, { recursive: true }), mkdir(runsDir), mkdir(path.join(cohort, '.fixtures'), { recursive: true })]);
     await Promise.all([
       cp(new URL('../evaluator/cube.mjs', import.meta.url), path.join(site, 'engine.mjs')),
       writeFile(path.join(site, 'index.html'), '<!doctype html><title>demo</title>'),
       writeFile(path.join(workspace, 'public-tests.mjs'), '// fixture'),
       writeFile(path.join(workspace, 'payload.json'), JSON.stringify(payload)),
-      writeFile(path.join(cohort, 'commitment.json'), JSON.stringify({ prompts: { 'prism-twist': promptHash } })),
+      writeFile(path.join(cohort, 'commitment.json'), JSON.stringify({ prompts: { 'prism-twist': promptHash }, evaluators: { 'prism-twist': evaluatorHash }, fixtures: { 'prism-twist': fixtureHash } })),
+      writeFile(path.join(cohort, '.fixtures', 'prism-twist.json'), JSON.stringify({ taskId: 'prism-twist', fixture })),
       writeFile(path.join(workspace, 'codex-events.jsonl'), `${JSON.stringify({ type: 'item.completed', item: { type: 'command_execution', command: 'Get-Content C:\\\\repo\\\\evaluator\\\\cube.mjs; Get-Content C:\\\\Users\\\\test\\\\.codex\\\\skills\\\\demo\\\\SKILL.md' } })}\n${JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } })}\n`),
       writeFile(path.join(workspace, 'codex-run.json'), JSON.stringify({
         schemaVersion: 1,
@@ -195,6 +205,11 @@ test('debug finalizer creates an append-only live showcase record', async () => 
       runsDir,
       runId: 'debug-test-prism-twist',
       cohortId: 'debug-test',
+      browserSmoke: async (_taskId, _site, { artifactsDir }) => {
+        await mkdir(artifactsDir, { recursive: true });
+        await Promise.all(['before.png', 'middle.png', 'after.png'].map(name => writeFile(path.join(artifactsDir, name), name)));
+        return { pass: true, frameChanged: true };
+      },
     });
     assert.equal(result.run.showcase.kind, 'live');
     assert.equal(result.run.usage.total.totalTokens, 15);

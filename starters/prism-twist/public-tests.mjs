@@ -26,8 +26,8 @@ assert.throws(() => applyAlgorithm(solved, ["R", "NOPE"]));
 assert.equal(serialize(solved), before, "invalid algorithms must be atomic");
 assert.notDeepEqual(applyMove(solved, "R"), solved);
 
-const scramble = generateScramble(0x00c0ffee, 25);
-assert.equal(scramble.length, 25);
+const scramble = generateScramble(0x00c0ffee, 12);
+assert.equal(scramble.length, 12);
 const axis = (token) => ({ U: "y", D: "y", R: "x", L: "x", F: "z", B: "z" })[token[0]];
 for (let i = 1; i < scramble.length; i += 1) {
   assert.notEqual(axis(scramble[i - 1]), axis(scramble[i]));

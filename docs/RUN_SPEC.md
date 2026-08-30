@@ -14,7 +14,7 @@
 - `artifacts`: 任意の画像・動画。`{kind,path,label}`を列挙し、pathはrun directory内の相対pathだけにする。
 - `showcase`: 任意の実動表示。coding課題は`{kind:"live",entry:"showcase/index.html",protocol:"LIGHTBENCH-1",scenario:"public-v1"}`、chat課題は表示するUTF-8 textを`turns`へ列挙する。未取得・不正・未完成なら`null`とし、理由を`evaluation.showcase.reason`へ残す。
 - `versions`: prompt、starter、evaluator、fixtureのversionとSHA-256。
-- `evaluation`: headline、logic、robustness、experience、resources。
+- `evaluation`: headline、logic、robustness、replay、experience、resources。debugの主表示は常にtop-level `status: inconclusive`とし、内部checkのpassを正式合格へ読み替えない。
 
 rootはsubagent数に含めない。model表示名・provider・正確なmodel ID、実行日時、subagent数はrunnerが必ず記録する。providerが返さないtokenや費用は`0`ではなく`null`とし、`costStatus`を`unavailable`にする。root/subagent/totalがすべて既知の値は、totalが前2者の和でなければbuildを拒否する。
 
@@ -29,3 +29,5 @@ statusは`pass`、`partial`、`candidate-fail`、`infra-error`、`inconclusive`�
 live showcaseだけは候補HTML/CSS/JavaScriptを公開できる。UTF-8の`.html`、`.css`、`.js`、`.mjs`、`.json`に限定し、合計2 MiB以下、symlink・path traversal・`base`要素・候補独自CSPを拒否する。build時に信頼済みCSPとbridgeを注入し、公開ページは`sandbox="allow-scripts"`だけを持つopaque-origin iframeへ初期状態まで自動mountする。課題ボタンは準備済み状態から公開操作だけを実行し、同時実行は1件に限定する。別課題へ切り替えると前のshowcaseを新しいiframeの初期状態へ戻す。showcase内の表示やmessageは観察用であり、scoreは独立評価器の記録だけを正とする。
 
 `execution.limits`には各budgetが`hard`か`observed-only`かを記録する。強制できない24 agent stepや20,000 output tokenをhard制限として表示してはならず、超過runは正式結果にしない。
+
+cohortのprepare時にprompt、evaluator、fixtureをhash commitmentへ封印する。finalizeは3つを再照合し、fresh Chromiumでload→reset→公開操作→終端frameのbrowser smokeを行う。browser smokeは再演可能性だけを測り、独立oracleのlogic判定を置き換えない。

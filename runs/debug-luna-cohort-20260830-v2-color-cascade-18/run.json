@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-cohort-20260830-v2-color-cascade-18",
+  "cohortId": "debug-luna-cohort-20260830-v2",
+  "taskId": "color-cascade-18",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-30T02:33:58.496Z",
+    "endedAt": "2026-08-30T02:45:58.496Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720000,
+    "agentSteps": 18,
+    "toolCalls": 14,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "codexHomeIsolation": "auth-only-temporary-home",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720000,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 18,
+        "withinLimit": true
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [
+    {
+      "kind": "image",
+      "path": "artifacts/before.png",
+      "label": "browser smoke before"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/middle.png",
+      "label": "browser smoke middle"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/after.png",
+      "label": "browser smoke after"
+    }
+  ],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "PUYO-1.5",
+    "commonPrompt": "CODE-1.4",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1",
+    "fixture": "sealed-cohort-v1",
+    "replay": "chromium-cdp-v1"
+  },
+  "hashes": {
+    "prompt": "f71693c67c15fe896cd876d00ad4fe9d9f43869c7a9139832fe9f98ff3ccf400",
+    "starter": "510c5e925d7d7446e394498deee163abc44f8238e0e863145323a7b0fe3317c2",
+    "candidateSite": "fdc5b2d2d159d451990c260cf550f517debf51ea165b80d2546562a3fffbee59",
+    "evaluator": "4beb576f787f8e950798949d38b9971575f54077c7e3023d7300bdee2be7ab01",
+    "evaluatorCommitment": "dbfe4986c9ca7b515706089a9a7287e868d57483f7099117fa2b985f39cbe1c9",
+    "fixture": "bba423c6413bf4f8808a1cd3f3f15e400db61db30af0a629ba6af71efc6264e9",
+    "cohortCommitment": "839c94a38cf24ea70f1730ad194a36aa700b9b55a77d1d4fb69619a7a193aa1a",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "replay": {
+      "schemaVersion": 1,
+      "taskId": "color-cascade-18",
+      "pass": true,
+      "api": [
+        "reset",
+        "runChallenge"
+      ],
+      "frameChanged": true,
+      "screenshotHashes": {
+        "before": "09eb943fa1de215855774ea4c91f2396d807c0bf36f1c84b18063c7f019d94e2",
+        "middle": "5fdb77738e58a3cd03564cdff6aed756f574af053e46873ae09f9c0e5d7c5413",
+        "after": "23e4e9c04d19b9bd15bb72719b07128c5525a064c7ab21f150169ffdd9782552"
+      },
+      "result": {
+        "mode": "challenge",
+        "status": "ALL CLEAR",
+        "chain": 18,
+        "chainCount": 18,
+        "clearCount": 0,
+        "cleared": [],
+        "board": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "landed": true,
+        "solved": true,
+        "next": {
+          "x": 0,
+          "rotation": 1,
+          "colors": [
+            3,
+            3
+          ]
+        },
+        "eventCount": 37
+      },
+      "errors": []
+    },
+    "experience": {
+      "status": "reviewed",
+      "checks": {
+        "recognizable": true,
+        "motionLegible": true,
+        "terminalStateLegible": true
+      },
+      "notes": "色分けされた丸いピース、14段の盤面、18連鎖後の全消しが視覚的に判別できます。"
+    },
+    "fixture": {
+      "sha256": "bba423c6413bf4f8808a1cd3f3f15e400db61db30af0a629ba6af71efc6264e9"
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。"
+    ],
+    "measurementFailures": [
+      "token usage was not reported",
+      "runner termination: timeout"
+    ],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "color-cascade-18",
+      "fixture": {
+        "sha256": "bba423c6413bf4f8808a1cd3f3f15e400db61db30af0a629ba6af71efc6264e9"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "challenge shape: 70 cells, 4 colors, gravity packed",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "falling pair creates exact 18 × 4 and all clear",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "candidate locks the displayed pair correctly",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "candidate challenge trace equals oracle",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "resolve differential (8 boards)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "dropPair differential (6 cases)",
+          "kind": "logic",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": true,
+      "robustnessPass": true,
+      "pass": true
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": true
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

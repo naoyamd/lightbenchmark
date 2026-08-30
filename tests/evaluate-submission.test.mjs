@@ -13,7 +13,11 @@ import {
   evaluateSubmission,
 } from "../scripts/evaluate-submission.mjs";
 
-const challenge = JSON.parse(await readFile(new URL("../evaluator/fixtures/puyo-18.json", import.meta.url), "utf8"));
+const solvedChallenge = JSON.parse(await readFile(new URL("../evaluator/fixtures/puyo-18.json", import.meta.url), "utf8"));
+const board = structuredClone(solvedChallenge.board);
+board[6][0] = 0;
+board[11][1] = 0;
+const challenge = { board: puyo.applyGravity(board), pair: { x: 0, rotation: 1, colors: [3, 3] } };
 
 test("reference engines qualify against the independent evaluator", async () => {
   const puyoResult = await evaluatePuyoModule(puyo, challenge);
@@ -64,7 +68,7 @@ test("all reference candidates qualify through permission-limited processes", as
     await Promise.all([
       cp(new URL("../evaluator/cube.mjs", import.meta.url), path.join(cubeDirectory, "engine.mjs")),
       cp(new URL("../evaluator/puyo.mjs", import.meta.url), path.join(puyoDirectory, "engine.mjs")),
-      cp(new URL("../evaluator/fixtures/puyo-18.json", import.meta.url), path.join(puyoDirectory, "challenge.json")),
+      writeFile(path.join(puyoDirectory, "challenge.json"), JSON.stringify(challenge)),
       cp(new URL("../evaluator/rocket.mjs", import.meta.url), path.join(rocketDirectory, "sim.mjs")),
       cp(new URL("../evaluator/rocket-reference-controller.mjs", import.meta.url), path.join(rocketDirectory, "controller.mjs")),
     ]);

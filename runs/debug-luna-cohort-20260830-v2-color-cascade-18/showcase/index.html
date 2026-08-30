@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Color Cascade</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #eef7ff;
+      --muted: #8fa7bf;
+      --line: rgba(166, 210, 239, .18);
+      --panel: rgba(16, 33, 55, .8);
+      --cell: min(7.2vw, 5.35vh);
+      --field-w: calc(var(--cell) * 6);
+      --field-h: calc(var(--cell) * 14);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { margin: 0; min-width: 100%; min-height: 100%; }
+
+    body {
+      min-height: 100vh;
+      overflow: hidden;
+      background: #06101d;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    .stage {
+      position: relative;
+      display: grid;
+      min-height: 100vh;
+      min-height: 100svh;
+      place-items: center;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 50% 39%, rgba(46, 113, 164, .22), transparent 28rem),
+        radial-gradient(circle at 50% 115%, rgba(66, 34, 112, .3), transparent 42rem),
+        linear-gradient(145deg, #06101d 0%, #0b1729 51%, #110e24 100%);
+    }
+
+    .stage::before,
+    .stage::after {
+      position: absolute;
+      z-index: -1;
+      display: block;
+      content: "";
+      width: 42rem;
+      height: 42rem;
+      border: 1px solid rgba(147, 213, 255, .08);
+      border-radius: 50%;
+      transform: translateY(8rem);
+    }
+
+    .stage::after {
+      width: 62rem;
+      height: 62rem;
+      border-color: rgba(188, 127, 255, .05);
+      transform: translateY(11rem);
+    }
+
+    .game-shell {
+      display: grid;
+      grid-template-columns: minmax(74px, 112px) auto minmax(74px, 112px);
+      align-items: center;
+      gap: clamp(12px, 2.4vw, 31px);
+      width: min(94vw, 710px);
+      transform: translateY(-1vh);
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 12px;
+      align-self: start;
+      margin-top: 13.5rem;
+    }
+
+    .side-card {
+      position: relative;
+      min-height: 104px;
+      padding: 12px 9px 13px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: linear-gradient(155deg, rgba(23, 48, 75, .78), rgba(11, 21, 39, .72));
+      box-shadow: 0 13px 30px rgba(0, 0, 0, .18), inset 0 1px rgba(255, 255, 255, .05);
+    }
+
+    .side-card::after {
+      position: absolute;
+      right: -18px;
+      bottom: -25px;
+      width: 62px;
+      height: 62px;
+      border: 1px solid rgba(153, 207, 255, .14);
+      border-radius: 50%;
+      content: "";
+    }
+
+    .side-label {
+      display: block;
+      color: #9cb6cd;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .2em;
+      line-height: 1;
+      text-align: center;
+    }
+
+    .side-caption {
+      display: block;
+      margin-top: 6px;
+      color: #69839e;
+      font-size: 8px;
+      letter-spacing: .06em;
+      text-align: center;
+    }
+
+    .mini-pair {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1px;
+      height: 54px;
+      margin: 4px auto 0;
+    }
+
+    .mini-pair.is-vertical { flex-direction: column; gap: 0; }
+
+    .mini-pair .puyo {
+      position: relative;
+      inset: auto;
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .next-card { border-color: rgba(110, 219, 241, .26); }
+    .next-card .mini-pair { opacity: .82; transform: scale(.84); }
+
+    .board-column { position: relative; }
+
+    .title-row {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      width: var(--field-w);
+      margin: 0 auto 10px;
+    }
+
+    .title-lockup {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-orb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #5de1ee;
+      box-shadow: 8px -3px 0 -2px #ffce55, 0 0 17px rgba(93, 225, 238, .62);
+    }
+
+    .title {
+      color: #e8f6ff;
+      font-size: clamp(13px, 1.8vw, 17px);
+      font-weight: 800;
+      letter-spacing: .16em;
+      line-height: 1;
+    }
+
+    .subtitle {
+      margin-top: 5px;
+      color: #7892ac;
+      font-size: 8px;
+      letter-spacing: .16em;
+      line-height: 1;
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      width: var(--field-w);
+      margin: 0 auto 9px;
+      padding: 7px 8px;
+      border: 1px solid rgba(174, 220, 245, .15);
+      border-radius: 11px;
+      background: rgba(12, 28, 48, .75);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, .14);
+    }
+
+    .hud-item {
+      min-width: 0;
+      padding: 0 6px;
+      border-right: 1px solid rgba(174, 220, 245, .12);
+      text-align: center;
+    }
+
+    .hud-item:last-child { border-right: 0; }
+
+    .hud-label {
+      display: block;
+      color: #7893ad;
+      font-size: 7px;
+      font-weight: 800;
+      letter-spacing: .16em;
+      line-height: 1.2;
+    }
+
+    .hud-value {
+      display: block;
+      overflow: hidden;
+      margin-top: 3px;
+      color: #eefaff;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .07em;
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .hud-item:nth-child(1) .hud-value { font-size: 7px; letter-spacing: .02em; }
+    .hud-item:nth-child(2) .hud-value { color: #ffcf66; font-size: 14px; }
+    .hud-item:nth-child(3) .hud-value { color: #75e4ee; }
+    .hud-item:nth-child(4) .hud-value { color: #cbb4ff; font-size: 7px; letter-spacing: .02em; }
+
+    .field-frame {
+      position: relative;
+      width: calc(var(--field-w) + 20px);
+      margin: 0 auto;
+      padding: 9px;
+      border: 1px solid rgba(158, 211, 245, .36);
+      border-radius: 18px 18px 24px 24px;
+      background: linear-gradient(145deg, rgba(28, 58, 85, .87), rgba(10, 20, 38, .94));
+      box-shadow: 0 24px 55px rgba(0, 0, 0, .35), 0 0 0 5px rgba(47, 103, 137, .08), inset 0 1px rgba(255, 255, 255, .12);
+    }
+
+    .field-frame::before {
+      position: absolute;
+      top: 5px;
+      left: 17px;
+      width: 48px;
+      height: 2px;
+      border-radius: 4px;
+      background: #70dce9;
+      box-shadow: 57px 0 #a779ff, 114px 0 #ffcf66;
+      content: "";
+      opacity: .75;
+    }
+
+    .board {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(6, var(--cell));
+      grid-template-rows: repeat(14, var(--cell));
+      width: var(--field-w);
+      height: var(--field-h);
+      overflow: hidden;
+      border: 1px solid rgba(175, 225, 248, .28);
+      border-radius: 10px 10px 17px 17px;
+      background:
+        linear-gradient(rgba(114, 170, 201, .09) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(114, 170, 201, .09) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(12, 31, 52, .98), rgba(6, 16, 31, .98));
+      background-size: var(--cell) var(--cell), var(--cell) var(--cell), auto;
+    }
+
+    .slot {
+      position: relative;
+      width: var(--cell);
+      height: var(--cell);
+    }
+
+    .puyo {
+      --puyo: #66e2ee;
+      --puyo-dark: #267b9a;
+      position: absolute;
+      inset: 1px;
+      display: block;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, .25);
+      border-radius: 48% 52% 51% 49%;
+      background: radial-gradient(circle at 32% 23%, rgba(255, 255, 255, .9) 0 7%, rgba(255, 255, 255, .3) 8% 17%, transparent 18%), radial-gradient(circle at 37% 30%, var(--puyo) 0 49%, var(--puyo-dark) 100%);
+      box-shadow: inset -3px -5px 6px rgba(0, 0, 0, .2), inset 2px 2px 4px rgba(255, 255, 255, .22), 0 2px 4px rgba(0, 0, 0, .34);
+      transform: rotate(-2deg);
+    }
+
+    .puyo::before {
+      position: absolute;
+      top: 36%;
+      left: 28%;
+      width: 10%;
+      height: 15%;
+      border-radius: 50%;
+      background: #10223a;
+      box-shadow: 285% 0 #10223a;
+      content: "";
+    }
+
+    .puyo::after {
+      position: absolute;
+      top: 57%;
+      left: 42%;
+      width: 19%;
+      height: 10%;
+      border-bottom: 1px solid rgba(16, 34, 58, .8);
+      border-radius: 0 0 50% 50%;
+      content: "";
+    }
+
+    .puyo .mark {
+      position: absolute;
+      right: 16%;
+      bottom: 17%;
+      width: 18%;
+      height: 18%;
+      background: rgba(255, 255, 255, .52);
+      opacity: .82;
+    }
+
+    .c1 { --puyo: #ff6873; --puyo-dark: #b92f58; }
+    .c1 .mark { border-radius: 50%; }
+    .c2 { --puyo: #ffd15b; --puyo-dark: #c27827; }
+    .c2 .mark { transform: rotate(45deg); }
+    .c3 { --puyo: #57d9e8; --puyo-dark: #2777b4; }
+    .c3 .mark { width: 23%; height: 12%; border-radius: 50%; transform: rotate(-28deg); }
+    .c4 { --puyo: #bf8bff; --puyo-dark: #6844ad; }
+    .c4 .mark { width: 15%; height: 15%; border-radius: 3px; transform: rotate(45deg); }
+
+    .puyo.is-clearing {
+      z-index: 3;
+      animation: clear-pop .34s ease-in both;
+    }
+
+    .board.is-falling .puyo {
+      animation: fall-in .32s cubic-bezier(.2, .8, .3, 1) both;
+    }
+
+    .active-pair {
+      position: absolute;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      width: calc(var(--cell) * 2);
+      height: var(--cell);
+      pointer-events: none;
+      filter: drop-shadow(0 5px 5px rgba(0, 0, 0, .32));
+      animation: pair-hover .65s ease-in-out infinite alternate;
+    }
+
+    .active-pair.rot-0,
+    .active-pair.rot-2 { flex-direction: column; width: var(--cell); height: calc(var(--cell) * 2); }
+    .active-pair .puyo { position: relative; inset: auto; flex: 0 0 var(--cell); width: var(--cell); height: var(--cell); }
+
+    .floor-glow {
+      position: absolute;
+      bottom: -5px;
+      left: 18px;
+      width: calc(100% - 36px);
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(74, 212, 232, .36);
+      filter: blur(7px);
+    }
+
+    .all-clear {
+      position: absolute;
+      z-index: 8;
+      top: 50%;
+      left: 50%;
+      width: calc(var(--field-w) - 12px);
+      padding: 14px 4px 13px;
+      border: 1px solid rgba(255, 224, 125, .63);
+      border-radius: 13px;
+      background: linear-gradient(90deg, rgba(30, 55, 86, .95), rgba(71, 46, 102, .95));
+      box-shadow: 0 0 30px rgba(255, 208, 99, .24), inset 0 1px rgba(255, 255, 255, .18);
+      color: #fff1bd;
+      font-size: clamp(15px, 2.4vw, 23px);
+      font-weight: 900;
+      letter-spacing: .13em;
+      text-align: center;
+      transform: translate(-50%, -50%);
+      animation: clear-banner .55s ease-out both;
+    }
+
+    .all-clear small {
+      display: block;
+      margin-top: 4px;
+      color: #f4d986;
+      font-size: 8px;
+      letter-spacing: .3em;
+    }
+
+    .foot-note {
+      display: flex;
+      justify-content: space-between;
+      width: var(--field-w);
+      margin: 9px auto 0;
+      color: #7892aa;
+      font-size: 7px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    @keyframes clear-pop {
+      0% { opacity: 1; transform: scale(1) rotate(-2deg); }
+      38% { opacity: 1; transform: scale(1.16) rotate(6deg); }
+      100% { opacity: .08; transform: scale(.26) rotate(-12deg); }
+    }
+
+    @keyframes fall-in {
+      0% { opacity: .4; transform: translateY(calc(var(--cell) * -0.7)) rotate(-2deg); }
+      72% { transform: translateY(calc(var(--cell) * .08)) rotate(4deg); }
+      100% { opacity: 1; transform: translateY(0) rotate(-2deg); }
+    }
+
+    @keyframes pair-hover {
+      from { transform: translateY(-2px); }
+      to { transform: translateY(3px); }
+    }
+
+    @keyframes clear-banner {
+      0% { opacity: 0; transform: translate(-50%, -44%) scale(.9); }
+      100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    @media (max-width: 640px) {
+      :root { --cell: min(11vw, 5.5vh); }
+      .game-shell { grid-template-columns: 1fr auto 1fr; gap: 7px; width: 99vw; }
+      .side-stack { margin-top: 11rem; }
+      .side-card { min-height: 86px; padding: 9px 4px; }
+      .mini-pair { height: 44px; }
+      .mini-pair .puyo { width: 25px; height: 25px; }
+      .title-row, .hud, .foot-note { width: var(--field-w); }
+      .title { font-size: 12px; }
+      .subtitle { font-size: 6px; }
+      .hud { padding: 6px 3px; }
+      .hud-item { padding: 0 2px; }
+      .hud-value { font-size: 8px; }
+    }
+
+    @media (max-height: 620px) {
+      :root { --cell: min(7vw, 4.7vh); }
+      .game-shell { transform: translateY(0); }
+      .side-stack { margin-top: 10rem; }
+      .title-row { margin-bottom: 6px; }
+      .hud { margin-bottom: 5px; }
+      .foot-note { margin-top: 5px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" data-lightbench-stage aria-label="Color Cascade challenge stage">
+    <div class="game-shell">
+      <div class="side-stack" aria-label="pair previews">
+        <div class="side-card pair-card">
+          <span class="side-label">PAIR</span>
+          <span class="side-caption">DROP</span>
+          <div id="pair-preview" class="mini-pair" aria-hidden="true"></div>
+        </div>
+        <div class="side-card next-card">
+          <span class="side-label">NEXT</span>
+          <span class="side-caption">READY</span>
+          <div id="next-preview" class="mini-pair is-vertical" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <section class="board-column" aria-label="six by fourteen field">
+        <div class="title-row">
+          <div class="title-lockup">
+            <span class="title-orb" aria-hidden="true"></span>
+            <div>
+              <div class="title">CHAIN FIELD</div>
+              <div class="subtitle">COLOR PUYO / 06 × 14</div>
+            </div>
+          </div>
+        </div>
+        <div class="hud" aria-live="polite">
+          <div class="hud-item"><span class="hud-label">MODE</span><span id="mode-value" class="hud-value">CHALLENGE</span></div>
+          <div class="hud-item"><span class="hud-label">CHAIN</span><span id="chain-value" class="hud-value">0</span></div>
+          <div class="hud-item"><span class="hud-label">CLEAR</span><span id="clear-value" class="hud-value">0</span></div>
+          <div class="hud-item"><span class="hud-label">STATUS</span><span id="status-value" class="hud-value">READY</span></div>
+        </div>
+        <div class="field-frame">
+          <div id="board" class="board" role="grid" aria-label="puyo field"></div>
+          <div class="floor-glow" aria-hidden="true"></div>
+          <div id="all-clear" class="all-clear" hidden>全消し<small>ALL CLEAR</small></div>
+        </div>
+        <div class="foot-note"><span>DROP • CLEAR • FALL</span><span>06 × 14</span></div>
+      </section>
+
+      <div aria-hidden="true"></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { RULES, dropPair, resolve } from './engine.mjs';
+
+    const boardElement = document.querySelector('#board');
+    const stageElement = document.querySelector('[data-lightbench-stage]');
+    const pairPreview = document.querySelector('#pair-preview');
+    const nextPreview = document.querySelector('#next-preview');
+    const allClearElement = document.querySelector('#all-clear');
+    const chainElement = document.querySelector('#chain-value');
+    const clearElement = document.querySelector('#clear-value');
+    const statusElement = document.querySelector('#status-value');
+
+    const emptyBoard = () => Array.from({ length: RULES.height }, () => Array(RULES.width).fill(0));
+    const copyBoard = board => board.map(row => row.slice());
+    const copyPair = pair => ({ x: pair.x, rotation: pair.rotation, colors: pair.colors.slice() });
+    const keyFor = (x, y) => `${x}:${y}`;
+    const sleepTimers = new Map();
+    const frameWaiters = new Map();
+    let generation = 0;
+    let activeRun = null;
+    let challenge = null;
+    let challengeError = null;
+    let eventLog = [];
+    let state = {
+      board: emptyBoard(),
+      clearing: [],
+      active: false,
+      running: false,
+      phase: 'ready',
+    };
+
+    function cloneGroups(groups) {
+      return groups.map(group => ({ color: group.color, cells: group.cells.map(cell => cell.slice()) }));
+    }
+
+    function clearPendingAnimations() {
+      for (const [timer, finish] of sleepTimers) {
+        clearTimeout(timer);
+        finish(false);
+      }
+      sleepTimers.clear();
+      for (const [frame, finish] of frameWaiters) {
+        cancelAnimationFrame(frame);
+        finish(false);
+      }
+      frameWaiters.clear();
+      stageElement.classList.remove('is-clearing', 'is-falling');
+    }
+
+    function wait(ms, token) {
+      if (token !== generation) return Promise.resolve(false);
+      return new Promise(resolveWait => {
+        const timer = setTimeout(() => {
+          sleepTimers.delete(timer);
+          resolveWait(token === generation);
+        }, ms);
+        sleepTimers.set(timer, resolveWait);
+      });
+    }
+
+    function waitForPaint(token) {
+      if (token !== generation) return Promise.resolve(false);
+      return new Promise(resolveWait => {
+        const frame = requestAnimationFrame(() => {
+          frameWaiters.delete(frame);
+          resolveWait(token === generation);
+        });
+        frameWaiters.set(frame, resolveWait);
+      });
+    }
+
+    function makePuyo(color, clearing = false) {
+      const puyo = document.createElement('span');
+      puyo.className = `puyo c${color}${clearing ? ' is-clearing' : ''}`;
+      puyo.innerHTML = '<span class="face" aria-hidden="true"><i></i><i></i></span><span class="mark" aria-hidden="true"></span>';
+      return puyo;
+    }
+
+    function currentChain() {
+      const clears = eventLog.filter(event => event.type === 'clear');
+      return clears.length ? clears[clears.length - 1].chain : 0;
+    }
+
+    function hasLanded() {
+      return eventLog.some(event => event.type === 'drop');
+    }
+
+    function isFinalEmpty() {
+      const last = eventLog[eventLog.length - 1];
+      return Boolean(last?.type === 'settle'
+        && state.board.flat().every(cell => cell === 0));
+    }
+
+    function currentStatus() {
+      if (isFinalEmpty()) return 'ALL CLEAR';
+      if (state.clearing.length) return 'CLEARING';
+      if (state.running && !hasLanded()) return 'FALLING';
+      if (eventLog.at(-1)?.type === 'settle') return 'FALLING';
+      if (eventLog.at(-1)?.type === 'drop') return 'LOCKED';
+      return 'READY';
+    }
+
+    function drawPair(target, pair, vertical = false) {
+      target.replaceChildren();
+      target.classList.toggle('is-vertical', vertical);
+      target.append(makePuyo(pair.colors[0]), makePuyo(pair.colors[1]));
+    }
+
+    function render() {
+      const clearing = new Set(state.clearing.map(([x, y]) => keyFor(x, y)));
+      const fragment = document.createDocumentFragment();
+      for (let y = RULES.height - 1; y >= 0; y -= 1) {
+        for (let x = 0; x < RULES.width; x += 1) {
+          const slot = document.createElement('div');
+          slot.className = 'slot';
+          slot.setAttribute('role', 'gridcell');
+          const color = state.board[y]?.[x] ?? 0;
+          if (color) {
+            const puyo = makePuyo(color, clearing.has(keyFor(x, y)));
+            puyo.setAttribute('aria-label', `color ${color}`);
+            slot.append(puyo);
+          }
+          fragment.append(slot);
+        }
+      }
+      boardElement.replaceChildren(fragment);
+      boardElement.classList.toggle('is-falling', state.phase === 'falling');
+      boardElement.classList.toggle('is-clearing', state.phase === 'clearing');
+
+      const existingActive = boardElement.querySelector('.active-pair');
+      existingActive?.remove();
+      if (state.active && challenge) {
+        const active = document.createElement('div');
+        active.className = `active-pair rot-${challenge.pair.rotation}`;
+        active.style.left = `${challenge.pair.x * 100 / RULES.width}%`;
+        active.style.top = '2px';
+        active.append(makePuyo(challenge.pair.colors[0]), makePuyo(challenge.pair.colors[1]));
+        boardElement.append(active);
+      }
+
+      const pair = challenge?.pair ?? { x: 0, rotation: 1, colors: [3, 3] };
+      drawPair(pairPreview, pair, pair.rotation === 0 || pair.rotation === 2);
+      drawPair(nextPreview, pair, true);
+      chainElement.textContent = String(currentChain());
+      clearElement.textContent = String(state.clearing.length);
+      statusElement.textContent = currentStatus();
+      allClearElement.hidden = !isFinalEmpty();
+      stageElement.classList.toggle('is-clearing', state.phase === 'clearing');
+      stageElement.classList.toggle('is-falling', state.phase === 'falling');
+    }
+
+    function snapshot() {
+      const board = copyBoard(state.board);
+      return {
+        mode: 'challenge',
+        status: currentStatus(),
+        chain: currentChain(),
+        chainCount: currentChain(),
+        clearCount: state.clearing.length,
+        cleared: state.clearing.map(cell => cell.slice()),
+        board,
+        landed: hasLanded(),
+        solved: isFinalEmpty(),
+        next: challenge ? copyPair(challenge.pair) : null,
+        eventCount: eventLog.length,
+      };
+    }
+
+    function logSnapshot() {
+      return eventLog.map(event => {
+        const copy = { ...event };
+        if (event.board) copy.board = copyBoard(event.board);
+        if (event.pair) copy.pair = copyPair(event.pair);
+        if (event.cells) copy.cells = event.cells.map(cell => cell.slice());
+        if (event.groups) copy.groups = cloneGroups(event.groups);
+        return copy;
+      });
+    }
+
+    function reset() {
+      generation += 1;
+      clearPendingAnimations();
+      activeRun = null;
+      eventLog = [];
+      state = {
+        board: challenge ? copyBoard(challenge.board) : emptyBoard(),
+        clearing: [],
+        active: false,
+        running: false,
+        phase: 'ready',
+      };
+      render();
+      return snapshot();
+    }
+
+    async function executeChallenge(token, animate) {
+      try {
+        await challengeReady;
+      } catch {
+        challengeError = challengeError ?? 'challenge unavailable';
+      }
+      if (token !== generation) return snapshot();
+      if (!challenge || challengeError) {
+        state.running = false;
+        state.phase = 'error';
+        render();
+        return snapshot();
+      }
+
+      const dropped = dropPair(copyBoard(challenge.board), copyPair(challenge.pair));
+      if (!dropped.ok) {
+        state.running = false;
+        state.phase = 'error';
+        render();
+        return snapshot();
+      }
+      const resolved = resolve(copyBoard(dropped.board));
+
+      state.running = true;
+      state.active = true;
+      state.phase = 'falling';
+      state.clearing = [];
+      state.board = copyBoard(challenge.board);
+      render();
+      if (animate) await wait(360, token);
+      if (token !== generation) return snapshot();
+
+      state.active = false;
+      state.landed = true;
+      state.board = copyBoard(dropped.board);
+      eventLog.push({ type: 'drop', pair: copyPair(challenge.pair), board: copyBoard(dropped.board) });
+      state.phase = 'falling';
+      render();
+      if (animate) await wait(180, token);
+      if (token !== generation) return snapshot();
+
+      for (const step of resolved.steps) {
+        state.phase = 'clearing';
+        state.clearing = step.cleared.map(cell => cell.slice());
+        eventLog.push({
+          type: 'clear',
+          chain: step.chain,
+          groups: cloneGroups(step.groups),
+          cells: step.cleared.map(cell => cell.slice()),
+        });
+        render();
+        if (animate) await wait(270, token);
+        if (token !== generation) return snapshot();
+
+        state.phase = 'falling';
+        state.clearing = [];
+        state.board = copyBoard(step.boardAfter);
+        eventLog.push({ type: 'settle', chain: step.chain, board: copyBoard(step.boardAfter) });
+        render();
+        if (animate) await wait(205, token);
+        if (token !== generation) return snapshot();
+      }
+
+      state.running = false;
+      state.phase = 'ready';
+      state.clearing = [];
+      render();
+      await waitForPaint(token);
+      return snapshot();
+    }
+
+    function runChallenge(options = {}) {
+      if (activeRun) return activeRun;
+      if (eventLog.length || isFinalEmpty()) reset();
+      const token = generation;
+      const animate = !(options === false || options?.animate === false || options?.animation === false);
+      let promise;
+      promise = executeChallenge(token, animate).finally(() => {
+        if (activeRun === promise) activeRun = null;
+      });
+      activeRun = promise;
+      return promise;
+    }
+
+    const challengeReady = fetch('./challenge.json')
+      .then(response => {
+        if (!response.ok) throw new Error('challenge request failed');
+        return response.json();
+      })
+      .then(data => {
+        challenge = { board: copyBoard(data.board), pair: copyPair(data.pair) };
+        if (!state.running && eventLog.length === 0) {
+          state.board = copyBoard(challenge.board);
+          render();
+        }
+        return challenge;
+      })
+      .catch(error => {
+        challengeError = error.message;
+        throw error;
+      });
+
+    window.__LIGHTBENCH__ = { reset, runChallenge, snapshot, log: logSnapshot };
+    render();
+  </script>
+</body>
+</html>

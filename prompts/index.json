@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "prompts": [
-    { "taskId": "japanese-chat", "version": "JP-1.0", "file": "japanese-chat-v1.md" },
-    { "taskId": "common-coding", "version": "CODE-1.3", "file": "common-coding-v1.3.md" },
-    { "taskId": "color-cascade-18", "version": "PUYO-1.4", "file": "color-cascade-18-v1.4.md" },
-    { "taskId": "prism-twist", "version": "CUBE-1.3", "file": "prism-twist-v1.3.md" },
-    { "taskId": "lander-pop", "version": "LANDER-2.0", "file": "lander-pop-v2.md" }
+    { "taskId": "japanese-chat", "version": "JP-1.1", "file": "japanese-chat-v1.1.md" },
+    { "taskId": "common-coding", "version": "CODE-1.4", "file": "common-coding-v1.4.md" },
+    { "taskId": "color-cascade-18", "version": "PUYO-1.5", "file": "color-cascade-18-v1.5.md" },
+    { "taskId": "prism-twist", "version": "CUBE-1.4", "file": "prism-twist-v1.4.md" },
+    { "taskId": "lander-pop", "version": "LANDER-2.1", "file": "lander-pop-v2.1.md" }
   ]
 }

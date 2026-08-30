@@ -91,7 +91,7 @@ export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max
       reasoning: { effort },
       tools: [],
       store: true,
-      max_output_tokens: 10_000,
+      max_output_tokens: 4_000,
     }, signal);
     const firstText = responseText(first);
     if (!firstText) throw new Error('turn 1 returned no output text');
@@ -109,7 +109,7 @@ export async function runChat({ workspace, model = 'gpt-5.6-luna', effort = 'max
       reasoning: { effort },
       tools: [],
       store: true,
-      max_output_tokens: 10_000,
+      max_output_tokens: 4_000,
     }, signal);
     const secondText = responseText(second);
     if (!secondText) throw new Error('turn 2 returned no output text');

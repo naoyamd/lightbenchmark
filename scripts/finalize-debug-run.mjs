@@ -6,6 +6,7 @@ import { evaluateTurn1, evaluateTurn2 } from '../evaluator/chat.mjs';
 import { validateRun } from './build-site.mjs';
 import { evaluateSubmission } from './evaluate-submission.mjs';
 import { consumeCodexLine, emptyCodexStats } from './run-codex-task.mjs';
+import { smokeShowcase } from './showcase-smoke.mjs';
 
 const scriptFile = fileURLToPath(import.meta.url);
 const projectRoot = path.resolve(path.dirname(scriptFile), '..');
@@ -24,6 +25,23 @@ const externalContextPatterns = [
 
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const fileHash = async file => sha256(await readFile(file));
+
+async function publishStaging(source, target) {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await rename(source, target); } catch (error) {
+      if (error.code !== 'EPERM' || attempt === 4) throw error;
+      await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+    }
+  }
+}
+
+async function evaluatorHash(taskId, legacyBufferJson = false, includeSmoke = true) {
+  const files = taskId === 'japanese-chat'
+    ? ['evaluator/chat.mjs']
+    : ['scripts/evaluate-submission.mjs', `evaluator/${({ 'color-cascade-18': 'puyo', 'prism-twist': 'cube', 'lander-pop': 'rocket' })[taskId]}.mjs`];
+  if (includeSmoke && taskId !== 'japanese-chat') files.splice(1, 0, 'scripts/showcase-smoke.mjs');
+  return sha256((await Promise.all(files.map(file => readFile(path.join(projectRoot, file))))).map((bytes, index) => `${files[index]}\0${sha256(legacyBufferJson ? JSON.stringify(bytes) : bytes)}`).join('\n'));
+}
 
 function identifier(value, name) {
   if (typeof value !== 'string' || !/^[A-Za-z0-9._-]+$/u.test(value) || value === '.' || value === '..') {
@@ -117,10 +135,13 @@ function observedLimits(metadata, usage) {
   };
 }
 
-async function buildEvaluation(taskId, workspace, runner, showcaseState) {
+async function buildEvaluation(taskId, workspace, runner, showcaseState, fixtureFile, fixture, replay, experience) {
   const common = {
     status: 'debug-only',
     showcase: showcaseState,
+    replay,
+    experience,
+    fixture: { sha256: sha256(JSON.stringify(fixture)) },
     comparabilityBlockers: ['同一ホストのdebug実行で、正式比較用の隔離laneではありません。'],
     measurementFailures: [],
   };
@@ -141,15 +162,19 @@ async function buildEvaluation(taskId, workspace, runner, showcaseState) {
       regularFile(firstFile).then(stat => stat ? readFile(firstFile, 'utf8') : null),
       regularFile(secondFile).then(stat => stat ? readFile(secondFile, 'utf8') : null),
     ]);
+    const deterministicChecks = first && second ? { turn1: evaluateTurn1(first), turn2: evaluateTurn2(second) } : null;
+    const truthPass = Boolean(deterministicChecks?.turn1?.truthPass && deterministicChecks?.turn2?.truthPass);
     return {
       ...common,
-      deterministicChecks: first && second ? { turn1: evaluateTurn1(first), turn2: evaluateTurn2(second) } : null,
-      headline: { pass: Boolean(first && second), reason: first && second ? '2ターンを取得しました' : '2ターンの回答が揃っていません' },
+      deterministicChecks,
+      headline: { pass: truthPass, reason: !first || !second ? '2ターンの回答が揃っていません' : truthPass ? '6事実と訂正を確認しました' : '事実判定または訂正に誤りがあります' },
+      logic: { pass: truthPass },
+      robustness: { pass: Boolean(deterministicChecks?.turn2?.truthPass) },
     };
   }
 
   try {
-    const independentEvaluator = await evaluateSubmission(taskId, path.join(workspace, 'submission', 'site'));
+    const independentEvaluator = await evaluateSubmission(taskId, path.join(workspace, 'submission', 'site'), fixtureFile);
     return {
       ...common,
       independentEvaluator,
@@ -218,7 +243,7 @@ async function recoverRunner(workspace, taskId, recorded) {
   return recovered;
 }
 
-export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = path.join(projectRoot, 'runs'), workRoot = path.join(projectRoot, 'work'), timeZone = 'Asia/Tokyo' }) {
+export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = path.join(projectRoot, 'runs'), workRoot = path.join(projectRoot, 'work'), timeZone = 'Asia/Tokyo', browserSmoke = smokeShowcase }) {
   const root = path.resolve(workspace);
   const taskId = path.basename(root);
   if (taskId !== 'japanese-chat' && !codingTasks.has(taskId)) throw new Error(`unknown task directory: ${taskId}`);
@@ -241,6 +266,13 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
   const promptHash = sha256(JSON.stringify(payload.sequence));
   const commitment = JSON.parse(await readFile(path.join(root, '..', 'commitment.json'), 'utf8'));
   if (commitment.prompts?.[taskId] !== promptHash) throw new Error('payload does not match the fresh workspace commitment');
+  const fixtureFile = path.join(root, '..', '.fixtures', `${taskId}.json`);
+  const sealedFixture = JSON.parse(await readFile(fixtureFile, 'utf8'));
+  const fixtureHash = sha256(JSON.stringify(sealedFixture.fixture));
+  if (commitment.fixtures?.[taskId] !== fixtureHash) throw new Error('fixture does not match the fresh workspace commitment');
+  const commitmentVersion = commitment.schemaVersion ?? 0;
+  const currentEvaluatorHash = await evaluatorHash(taskId, commitmentVersion === 2, commitmentVersion >= 3);
+  if (commitment.evaluators?.[taskId] !== currentEvaluatorHash) throw new Error('evaluator does not match the fresh workspace commitment');
   runner = await recoverRunner(root, taskId, runner);
   const spawned = taskId === 'japanese-chat' ? 0 : runner.subagents ?? 0;
   const usage = usageRecord(runner.usage, spawned);
@@ -250,6 +282,17 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
   let showcase = null;
   let showcaseState = { available: false, reason: null };
   let candidateSiteHash = null;
+  let replay = null;
+  const visualReviewFile = path.join(root, 'visual-review.json');
+  const interventionsFile = path.join(root, 'interventions.json');
+  const experience = await regularFile(visualReviewFile)
+    ? JSON.parse(await readFile(visualReviewFile, 'utf8'))
+    : { status: 'unreviewed', checks: null, notes: '人手による視覚評価は未実施です' };
+  const interventions = await regularFile(interventionsFile)
+    ? JSON.parse(await readFile(interventionsFile, 'utf8'))
+    : [];
+  if (!Array.isArray(interventions)) throw new Error('interventions.json must contain an array');
+  const artifacts = [];
   try {
     if (taskId === 'japanese-chat') {
       const turnFiles = ['turn1-response.txt', 'turn2-response.txt'];
@@ -266,12 +309,25 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
         };
         showcaseState = { available: true, reason: null };
       } else {
-        showcaseState.reason = '回答未取得または64 KiB超過のため表示できません';
+        showcaseState.reason = runner.terminationReason === 'harness-error'
+          ? `未取得（ハーネスエラー: ${runner.error ?? 'unknown'}）`
+          : '回答未取得または64 KiB超過のため表示できません';
       }
     } else {
       const candidate = await inspectShowcase(path.join(root, 'submission', 'site'));
       candidateSiteHash = candidate.hash;
       if (candidate.valid) {
+        try {
+          const smokeDir = path.join(root, '.smoke');
+          replay = await browserSmoke(taskId, path.join(root, 'submission', 'site'), { artifactsDir: smokeDir });
+          await mkdir(path.join(staging, 'artifacts'));
+          for (const name of ['before.png', 'middle.png', 'after.png']) {
+            await cp(path.join(smokeDir, name), path.join(staging, 'artifacts', name));
+            artifacts.push({ kind: 'image', path: `artifacts/${name}`, label: `browser smoke ${name.replace('.png', '')}` });
+          }
+        } catch (error) {
+          replay = { pass: false, error: error instanceof Error ? error.message : String(error) };
+        }
         await cp(path.join(root, 'submission', 'site'), path.join(staging, 'showcase'), { recursive: true, errorOnExist: true, force: false });
         showcase = { kind: 'live', entry: 'showcase/index.html', protocol: 'LIGHTBENCH-1', scenario: 'public-v1' };
         showcaseState = { available: true, reason: null };
@@ -280,7 +336,10 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
       }
     }
 
-    const evaluation = await buildEvaluation(taskId, root, runner, showcaseState);
+    const evaluation = await buildEvaluation(taskId, root, runner, showcaseState, fixtureFile, sealedFixture.fixture, replay, experience);
+    if (replay?.pass === false) evaluation.measurementFailures.push(`browser smoke: ${replay.error ?? replay.errors?.join(', ') ?? 'failed'}`);
+    if (usage.total.totalTokens === null) evaluation.measurementFailures.push('token usage was not reported');
+    if (runner.terminationReason !== 'completed') evaluation.measurementFailures.push(`runner termination: ${runner.terminationReason ?? 'unknown'}`);
     for (const [name, item] of Object.entries(limits)) {
       if (item.withinLimit === false) evaluation.comparabilityBlockers.push(`${name} budget exceeded`);
     }
@@ -294,6 +353,9 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
       evaluator: await fileHash(taskId === 'japanese-chat'
         ? path.join(projectRoot, 'evaluator', 'chat.mjs')
         : path.join(projectRoot, 'scripts', 'evaluate-submission.mjs')),
+      evaluatorCommitment: currentEvaluatorHash,
+      fixture: fixtureHash,
+      cohortCommitment: sha256(JSON.stringify(commitment)),
       turn1Output: await regularFile(path.join(root, 'turn1-response.txt')) ? await fileHash(path.join(root, 'turn1-response.txt')) : null,
       turn2Output: await regularFile(path.join(root, 'turn2-response.txt')) ? await fileHash(path.join(root, 'turn2-response.txt')) : null,
     };
@@ -332,8 +394,8 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
       agents: spawned === 0
         ? { spawned: 0, completed: 0, failed: 0, maxConcurrent: 0, items: [] }
         : { spawned, completed: null, failed: null, maxConcurrent: null, items: null },
-      interventions: [],
-      artifacts: [],
+      interventions,
+      artifacts,
       showcase,
       versions: {
         benchmark: '1.0.0',
@@ -341,13 +403,15 @@ export async function finalizeDebugRun({ workspace, runId, cohortId, runsDir = p
         commonPrompt: payload.commonVersion ?? null,
         runner: runner.cliVersion ?? runner.harness,
         evaluator: 'in-repository-v1',
+        fixture: 'sealed-cohort-v1',
+        replay: 'chromium-cdp-v1',
       },
       hashes,
       evaluation,
     };
     validateRun(run, `${runId}/run.json`);
     await writeFile(path.join(staging, 'run.json'), `${JSON.stringify(run, null, 2)}\n`, 'utf8');
-    await rename(staging, target);
+    await publishStaging(staging, target);
     return { target, run };
   } catch (error) {
     await rm(staging, { recursive: true, force: true });

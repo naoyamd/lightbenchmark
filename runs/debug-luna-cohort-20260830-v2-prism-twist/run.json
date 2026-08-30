@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-cohort-20260830-v2-prism-twist",
+  "cohortId": "debug-luna-cohort-20260830-v2",
+  "taskId": "prism-twist",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-30T02:46:26.950Z",
+    "endedAt": "2026-08-30T02:58:26.950Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720000,
+    "agentSteps": 35,
+    "toolCalls": 26,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "codexHomeIsolation": "auth-only-temporary-home",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720000,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 35,
+        "withinLimit": false
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [
+    {
+      "kind": "image",
+      "path": "artifacts/before.png",
+      "label": "browser smoke before"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/middle.png",
+      "label": "browser smoke middle"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/after.png",
+      "label": "browser smoke after"
+    }
+  ],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "CUBE-1.4",
+    "commonPrompt": "CODE-1.4",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1",
+    "fixture": "sealed-cohort-v1",
+    "replay": "chromium-cdp-v1"
+  },
+  "hashes": {
+    "prompt": "51af3686d4130d75f20aba49748d8d206cf7bd6a276c17435ff020e82fd6b3e5",
+    "starter": "1b5edf244947eaf09a6528cc9ec4ab56716038028b4b8781dffca5edf5327748",
+    "candidateSite": "d78b7c05ea29140fb73939ee7062265bf20e212e10283a22cbfbfe24ab054f21",
+    "evaluator": "4beb576f787f8e950798949d38b9971575f54077c7e3023d7300bdee2be7ab01",
+    "evaluatorCommitment": "ad7cb7fc0755ea6fff86ddd3aad6cfa1c9548641f9f76b2a51032ca60f9dd50b",
+    "fixture": "c657a2aae44844f04d627070ad2000a09597e673eded4b30cabc5a0c9bbe0b26",
+    "cohortCommitment": "839c94a38cf24ea70f1730ad194a36aa700b9b55a77d1d4fb69619a7a193aa1a",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "replay": {
+      "schemaVersion": 1,
+      "taskId": "prism-twist",
+      "pass": true,
+      "api": [
+        "reset",
+        "scramble",
+        "play"
+      ],
+      "frameChanged": true,
+      "screenshotHashes": {
+        "before": "8a320ee4b3c3924f6e668c724405d0f55c6c4fb4026986654b8497ea3d62c206",
+        "middle": "9060c35e8a4f812287566d786d3efde44423b9cdd9c748c7d5226de35d723598",
+        "after": "f7e9c1e5d5ae60dbff94dcb0a5d7bf4b05d6c593888e2c3a2f51ca8fa68f4927"
+      },
+      "result": {
+        "phase": "solved",
+        "solved": true,
+        "state": {
+          "0": 0,
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 1,
+          "10": 1,
+          "11": 1,
+          "12": 1,
+          "13": 1,
+          "14": 1,
+          "15": 1,
+          "16": 1,
+          "17": 1,
+          "18": 2,
+          "19": 2,
+          "20": 2,
+          "21": 2,
+          "22": 2,
+          "23": 2,
+          "24": 2,
+          "25": 2,
+          "26": 2,
+          "27": 3,
+          "28": 3,
+          "29": 3,
+          "30": 3,
+          "31": 3,
+          "32": 3,
+          "33": 3,
+          "34": 3,
+          "35": 3,
+          "36": 4,
+          "37": 4,
+          "38": 4,
+          "39": 4,
+          "40": 4,
+          "41": 4,
+          "42": 4,
+          "43": 4,
+          "44": 4,
+          "45": 5,
+          "46": 5,
+          "47": 5,
+          "48": 5,
+          "49": 5,
+          "50": 5,
+          "51": 5,
+          "52": 5,
+          "53": 5
+        },
+        "scramble": [
+          "D'",
+          "L2",
+          "U'",
+          "B",
+          "D2",
+          "R2",
+          "B'",
+          "L'",
+          "B2",
+          "R2",
+          "F",
+          "L'"
+        ],
+        "truncated": true,
+        "originalBytes": 10500
+      },
+      "errors": []
+    },
+    "experience": {
+      "status": "reviewed",
+      "checks": {
+        "recognizable": true,
+        "motionLegible": true,
+        "terminalStateLegible": true
+      },
+      "notes": "スクランブル中は三面が見える3Dキューブとして明瞭で、回転手順と完成状態を確認できます。"
+    },
+    "fixture": {
+      "sha256": "c657a2aae44844f04d627070ad2000a09597e673eded4b30cabc5a0c9bbe0b26"
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。",
+      "agentSteps budget exceeded"
+    ],
+    "measurementFailures": [
+      "token usage was not reported",
+      "runner termination: timeout"
+    ],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "prism-twist",
+      "fixture": {
+        "sha256": "c657a2aae44844f04d627070ad2000a09597e673eded4b30cabc5a0c9bbe0b26"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "solved representation",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "canonical serialization",
+          "kind": "logic",
+          "pass": false,
+          "detail": "result did not match the reference"
+        },
+        {
+          "name": "deterministic scramble (3 seeds)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "move states equal oracle (5 algorithms)",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "scramble is solved only through inverse moves",
+          "kind": "headline",
+          "pass": true
+        },
+        {
+          "name": "invalid algorithm is atomic",
+          "kind": "logic",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": false,
+      "robustnessPass": true,
+      "pass": false
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": false
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

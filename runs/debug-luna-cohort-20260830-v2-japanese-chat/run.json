@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-cohort-20260830-v2-japanese-chat",
+  "cohortId": "debug-luna-cohort-20260830-v2",
+  "taskId": "japanese-chat",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-30T02:33:43.861Z",
+    "endedAt": "2026-08-30T02:33:43.865Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 4,
+    "agentSteps": 0,
+    "toolCalls": 0,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "harness-error",
+    "lane": "autonomous",
+    "harness": "openai-responses-api",
+    "isolation": "tools-disabled-api",
+    "codexHomeIsolation": null,
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 4,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [],
+  "artifacts": [],
+  "showcase": null,
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "JP-1.1",
+    "commonPrompt": null,
+    "runner": "openai-responses-api",
+    "evaluator": "in-repository-v1",
+    "fixture": "sealed-cohort-v1",
+    "replay": "chromium-cdp-v1"
+  },
+  "hashes": {
+    "prompt": "4f9cb1e871360fddbfd22f521b6021a643d4feeb0fe75c56f61eedff9e7fb290",
+    "starter": null,
+    "candidateSite": null,
+    "evaluator": "e9235ee9f063614fcd414314d797241fc1d3dd8a2555a35d584c27e964a0a8fb",
+    "evaluatorCommitment": "b34b9bd05e44e0c72f404f000a32faf2e76c5c9c4e76a92b5e48a46309072a9f",
+    "fixture": "dd0e901f4c0240a84a6644528f5f8cd7eb4e3a7121d0044dd509fd0b901e3871",
+    "cohortCommitment": "839c94a38cf24ea70f1730ad194a36aa700b9b55a77d1d4fb69619a7a193aa1a",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": false,
+      "reason": "未取得（ハーネスエラー: OPENAI_API_KEY is required）"
+    },
+    "replay": null,
+    "experience": {
+      "status": "unreviewed",
+      "checks": null,
+      "notes": "人手による視覚評価は未実施です"
+    },
+    "fixture": {
+      "sha256": "dd0e901f4c0240a84a6644528f5f8cd7eb4e3a7121d0044dd509fd0b901e3871"
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。"
+    ],
+    "measurementFailures": [
+      "OPENAI_API_KEY is required",
+      "token usage was not reported",
+      "runner termination: harness-error"
+    ],
+    "deterministicChecks": null,
+    "headline": {
+      "pass": false,
+      "reason": "2ターンの回答が揃っていません"
+    },
+    "logic": {
+      "pass": false
+    },
+    "robustness": {
+      "pass": false
+    }
+  }
+}

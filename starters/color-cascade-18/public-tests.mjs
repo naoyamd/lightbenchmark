@@ -21,9 +21,13 @@ assert.equal(dropped.board[0][2], 1);
 assert.equal(dropped.board[1][2], 2);
 
 const challenge = JSON.parse(await readFile("./submission/site/challenge.json", "utf8"));
-assert.deepEqual(Object.keys(challenge), ["board"]);
-assert.equal(challenge.board.flat().filter(Boolean).length, 72);
-const result = resolve(challenge.board);
+assert.deepEqual(Object.keys(challenge), ["board", "pair"]);
+assert.deepEqual(challenge.pair, { x: 0, rotation: 1, colors: [3, 3] });
+assert.equal(challenge.board.flat().filter(Boolean).length, 70);
+const droppedChallenge = dropPair(challenge.board, challenge.pair);
+assert.equal(droppedChallenge.ok, true);
+assert.equal(droppedChallenge.board.flat().filter(Boolean).length, 72);
+const result = resolve(droppedChallenge.board);
 assert.equal(result.chainCount, 18);
 assert.ok(result.steps.every((step) => step.cleared.length === 4));
 assert.ok(result.finalBoard.flat().every((cell) => cell === 0));

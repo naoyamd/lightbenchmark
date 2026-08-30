@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "runId": "debug-luna-cohort-20260830-v2-lander-pop",
+  "cohortId": "debug-luna-cohort-20260830-v2",
+  "taskId": "lander-pop",
+  "runKind": "debug",
+  "status": "inconclusive",
+  "model": {
+    "displayName": "GPT-5.6 Luna",
+    "provider": "OpenAI",
+    "modelId": "gpt-5.6-luna",
+    "revision": null,
+    "reasoning": {
+      "requested": "max",
+      "effective": null
+    }
+  },
+  "execution": {
+    "startedAt": "2026-08-30T03:54:17.414Z",
+    "endedAt": "2026-08-30T04:06:17.414Z",
+    "timeZone": "Asia/Tokyo",
+    "durationMs": 720000,
+    "agentSteps": 30,
+    "toolCalls": 27,
+    "commandPolicyBlocks": 0,
+    "benchmarkRepositoryExposure": [],
+    "externalContextExposure": [],
+    "terminationReason": "timeout",
+    "lane": "autonomous",
+    "harness": "codex-cli-agent codex-cli 0.146.1",
+    "isolation": "same-host-debug",
+    "codexHomeIsolation": "auth-only-temporary-home",
+    "limits": {
+      "wallClock": {
+        "limitMs": 720000,
+        "enforcement": "hard",
+        "observedMs": 720000,
+        "withinLimit": true
+      },
+      "agentSteps": {
+        "limit": 24,
+        "enforcement": "observed-only",
+        "observed": 30,
+        "withinLimit": false
+      },
+      "outputTokens": {
+        "limit": 20000,
+        "enforcement": "observed-only",
+        "observed": null,
+        "withinLimit": null
+      }
+    }
+  },
+  "usage": {
+    "root": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    },
+    "subagents": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedTokens": 0,
+      "reasoningTokens": 0,
+      "totalTokens": 0,
+      "cost": 0,
+      "currency": null,
+      "costStatus": "none"
+    },
+    "total": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedTokens": null,
+      "reasoningTokens": null,
+      "totalTokens": null,
+      "cost": null,
+      "currency": null,
+      "costStatus": "unavailable"
+    }
+  },
+  "agents": {
+    "spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "maxConcurrent": 0,
+    "items": []
+  },
+  "interventions": [
+    {
+      "kind": "host-restart-recovery",
+      "detail": "PC再起動で最初のロケットrunが中断。sealed commitment・fixture・promptを変更せず、fresh workspaceで1回再実行しました。旧ログは元workspaceに保存しています。"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "image",
+      "path": "artifacts/before.png",
+      "label": "browser smoke before"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/middle.png",
+      "label": "browser smoke middle"
+    },
+    {
+      "kind": "image",
+      "path": "artifacts/after.png",
+      "label": "browser smoke after"
+    }
+  ],
+  "showcase": {
+    "kind": "live",
+    "entry": "showcase/index.html",
+    "protocol": "LIGHTBENCH-1",
+    "scenario": "public-v1"
+  },
+  "versions": {
+    "benchmark": "1.0.0",
+    "prompt": "LANDER-2.1",
+    "commonPrompt": "CODE-1.4",
+    "runner": "codex-cli 0.146.1",
+    "evaluator": "in-repository-v1",
+    "fixture": "sealed-cohort-v1",
+    "replay": "chromium-cdp-v1"
+  },
+  "hashes": {
+    "prompt": "98b854ebcfcaa008436a0c50697ca48b6d54820f30ced5d4315d88ad86dfa3c1",
+    "starter": "c0b2826438e6ef4e427a3e508d9604b04ad8e4feb8810b567fa9dc6a32f5ee9b",
+    "candidateSite": "0f35103f3db87593b68485a59098c14a508b8c3f52fa84be825728bfc5aa29d4",
+    "evaluator": "4beb576f787f8e950798949d38b9971575f54077c7e3023d7300bdee2be7ab01",
+    "evaluatorCommitment": "1af0d13569c13a43f9a5ae3ab7dcf70fbf7970ca3b08a8f9cae10d9599e3a63a",
+    "fixture": "5c1844c70081c7b98e5131a79f93aa7e3e75dbbba5e9a34dc474516dd88fa2b1",
+    "cohortCommitment": "839c94a38cf24ea70f1730ad194a36aa700b9b55a77d1d4fb69619a7a193aa1a",
+    "turn1Output": null,
+    "turn2Output": null
+  },
+  "evaluation": {
+    "status": "debug-only",
+    "showcase": {
+      "available": true,
+      "reason": null
+    },
+    "replay": {
+      "schemaVersion": 1,
+      "taskId": "lander-pop",
+      "pass": true,
+      "api": [
+        "reset",
+        "run"
+      ],
+      "frameChanged": true,
+      "screenshotHashes": {
+        "before": "9621c0a68a7732601015661a0bebd81ce594c2fb1a4d166085ff9d8e82083f9d",
+        "middle": "b8e276a700090a6f289083c6949bfc3e22cb4ca6485bbfea33eb7f532541fa0f",
+        "after": "63c2400b7d780932dc19580569cf07a6ef85a80f0847c3adfc43e735c15d50b9"
+      },
+      "result": {
+        "status": "landed",
+        "state": {
+          "t": 12.859999999999815,
+          "x": -1.201232128207173,
+          "y": -0.0019243920196927028,
+          "vx": -0.544177086145875,
+          "vy": -0.9659694203889088,
+          "theta": 0.04525755152174051,
+          "omega": 0.01538277357752384,
+          "fuel": 0.36391876833291303,
+          "throttleActual": 0.48146764614605736,
+          "gimbalActual": 0.010418526538248974
+        },
+        "sensor": {
+          "t": 12.86,
+          "altitude": 0,
+          "xOffset": -1.2,
+          "theta": 0.05,
+          "fuel": 0.36
+        },
+        "control": {
+          "throttle": 0.47555840842597935,
+          "gimbal": 0.011264190476190216
+        },
+        "truncated": true,
+        "originalBytes": 297452
+      },
+      "errors": []
+    },
+    "experience": {
+      "status": "reviewed",
+      "checks": {
+        "recognizable": true,
+        "motionLegible": true,
+        "terminalStateLegible": true
+      },
+      "notes": "降下中の傾きと噴射、地面への接地、LANDED表示が視覚的に判別できます。"
+    },
+    "fixture": {
+      "sha256": "5c1844c70081c7b98e5131a79f93aa7e3e75dbbba5e9a34dc474516dd88fa2b1"
+    },
+    "comparabilityBlockers": [
+      "同一ホストのdebug実行で、正式比較用の隔離laneではありません。",
+      "agentSteps budget exceeded"
+    ],
+    "measurementFailures": [
+      "token usage was not reported",
+      "runner termination: timeout"
+    ],
+    "independentEvaluator": {
+      "schemaVersion": 1,
+      "taskId": "lander-pop",
+      "fixture": {
+        "sha256": "5c1844c70081c7b98e5131a79f93aa7e3e75dbbba5e9a34dc474516dd88fa2b1"
+      },
+      "checks": [
+        {
+          "name": "required exports",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "physics differential (120 steps)",
+          "kind": "robustness",
+          "pass": true
+        },
+        {
+          "name": "sensor and terminal classifications",
+          "kind": "logic",
+          "pass": true
+        },
+        {
+          "name": "oracle-sim landing (7/8 required)",
+          "kind": "headline",
+          "pass": true
+        }
+      ],
+      "headlinePass": true,
+      "logicPass": true,
+      "robustnessPass": true,
+      "pass": true,
+      "landings": [
+        {
+          "id": "scenario-1",
+          "status": "landed",
+          "landingTime": 13.239999999999807,
+          "fuel": 0.3522020307400758,
+          "safetyMargin": {
+            "pad": 4.5661229200965705,
+            "vx": 1.4908821854399,
+            "vy": 2.046651999422777,
+            "theta": 0.10453140061057561,
+            "omega": 0.2308592175496993
+          },
+          "minSafetyMargin": 0.10453140061057561
+        },
+        {
+          "id": "scenario-2",
+          "status": "landed",
+          "landingTime": 12.899999999999814,
+          "fuel": 0.36580915315735213,
+          "safetyMargin": {
+            "pad": 4.71150426889608,
+            "vx": 1.033896060196898,
+            "vy": 2.396979788066543,
+            "theta": 0.0805540646313653,
+            "omega": 0.25684189548818254
+          },
+          "minSafetyMargin": 0.0805540646313653
+        },
+        {
+          "id": "scenario-3",
+          "status": "landed",
+          "landingTime": 12.779999999999816,
+          "fuel": 0.3392891851220807,
+          "safetyMargin": {
+            "pad": 5.050290715191145,
+            "vx": 0.934640138423714,
+            "vy": 1.4200904431090846,
+            "theta": 0.1275937548147311,
+            "omega": 0.21175081199577866
+          },
+          "minSafetyMargin": 0.1275937548147311
+        },
+        {
+          "id": "scenario-4",
+          "status": "landed",
+          "landingTime": 15.299999999999763,
+          "fuel": 0.3140114121875237,
+          "safetyMargin": {
+            "pad": 5.0529257801248,
+            "vx": 1.4202452210689152,
+            "vy": 2.057346668159503,
+            "theta": 0.11153716062265563,
+            "omega": 0.2616454974210155
+          },
+          "minSafetyMargin": 0.11153716062265563
+        },
+        {
+          "id": "scenario-5",
+          "status": "landed",
+          "landingTime": 11.17999999999985,
+          "fuel": 0.2764980097139258,
+          "safetyMargin": {
+            "pad": 5.428470506935878,
+            "vx": 0.6923003809480899,
+            "vy": 1.059792280425602,
+            "theta": 0.12393311872104693,
+            "omega": 0.2239152545192494
+          },
+          "minSafetyMargin": 0.12393311872104693
+        },
+        {
+          "id": "scenario-6",
+          "status": "landed",
+          "landingTime": 17.559999999999715,
+          "fuel": 0.411203863658389,
+          "safetyMargin": {
+            "pad": 2.2625566230123626,
+            "vx": 1.2664329706104605,
+            "vy": 2.4858281159157416,
+            "theta": 0.08647366873061582,
+            "omega": 0.2366618089944652
+          },
+          "minSafetyMargin": 0.08647366873061582
+        },
+        {
+          "id": "scenario-7",
+          "status": "landed",
+          "landingTime": 13.419999999999803,
+          "fuel": 0.3715519737609817,
+          "safetyMargin": {
+            "pad": 5.231223812926075,
+            "vx": 1.65148148989091,
+            "vy": 2.0443996645685143,
+            "theta": 0.09973108062209426,
+            "omega": 0.24680836142948528
+          },
+          "minSafetyMargin": 0.09973108062209426
+        },
+        {
+          "id": "scenario-8",
+          "status": "landed",
+          "landingTime": 15.159999999999766,
+          "fuel": 0.3296855928743364,
+          "safetyMargin": {
+            "pad": 3.3897710559752694,
+            "vx": 1.23935544178384,
+            "vy": 1.761000326984007,
+            "theta": 0.09178848587576494,
+            "omega": 0.243345637936773
+          },
+          "minSafetyMargin": 0.09178848587576494
+        }
+      ]
+    },
+    "headline": {
+      "pass": true
+    },
+    "logic": {
+      "pass": true
+    },
+    "robustness": {
+      "pass": true
+    }
+  }
+}

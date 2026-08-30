@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lander Pop</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #e7f4f2;
+      --muted: #91aaa9;
+      --line: rgba(191, 239, 231, .18);
+      --glass: rgba(8, 19, 28, .72);
+      --accent: #6de0cc;
+      --warning: #ffbd68;
+      --danger: #ff6d6d;
+      --success: #79edb1;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      background: #07141e;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+    [data-lightbench-stage] {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      min-height: 520px;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(ellipse at 50% 4%, rgba(64, 125, 145, .20), transparent 46%),
+        linear-gradient(180deg, #0a1a29 0%, #091621 58%, #071019 100%);
+    }
+    [data-lightbench-stage]::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: .48;
+      background-image:
+        radial-gradient(circle at 7% 20%, rgba(217, 255, 248, .75) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 18% 38%, rgba(217, 255, 248, .48) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 31% 14%, rgba(217, 255, 248, .56) 0 1px, transparent 1.4px),
+        radial-gradient(circle at 56% 27%, rgba(217, 255, 248, .45) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 74% 12%, rgba(217, 255, 248, .68) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 88% 31%, rgba(217, 255, 248, .45) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 94% 10%, rgba(217, 255, 248, .7) 0 1px, transparent 1.5px);
+    }
+    .scene {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .scene text { font-family: inherit; }
+    .hud {
+      position: absolute;
+      top: clamp(16px, 3.2vw, 34px);
+      left: clamp(16px, 4vw, 56px);
+      display: grid;
+      grid-template-columns: repeat(3, minmax(76px, auto));
+      gap: 7px 12px;
+      padding: 12px 15px 13px;
+      border: 1px solid var(--line);
+      border-left: 2px solid var(--accent);
+      border-radius: 3px;
+      background: var(--glass);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, .18);
+      backdrop-filter: blur(8px);
+      z-index: 4;
+      font-size: 11px;
+      letter-spacing: .08em;
+    }
+    .readout { min-width: 74px; }
+    .readout .label {
+      display: block;
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: .14em;
+      margin-bottom: 4px;
+    }
+    .readout .value { white-space: nowrap; }
+    #statusValue { color: var(--accent); }
+    .status-landed #statusValue { color: var(--success); }
+    .status-failure #statusValue { color: var(--danger); }
+    .status-timeout #statusValue { color: var(--warning); }
+    .warning {
+      position: absolute;
+      left: clamp(16px, 4vw, 56px);
+      bottom: clamp(16px, 3vw, 31px);
+      z-index: 4;
+      color: rgba(231, 244, 242, .60);
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .wind-card {
+      position: absolute;
+      top: clamp(16px, 3.2vw, 34px);
+      right: clamp(16px, 4vw, 56px);
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      background: rgba(8, 19, 28, .54);
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: .12em;
+    }
+    #windArrow { color: var(--accent); font-size: 17px; line-height: 1; }
+    .legend-line {
+      position: absolute;
+      right: clamp(16px, 4vw, 56px);
+      bottom: clamp(16px, 3vw, 31px);
+      z-index: 4;
+      color: rgba(231, 244, 242, .42);
+      font-size: 9px;
+      letter-spacing: .12em;
+    }
+    @media (max-width: 620px) {
+      .hud { grid-template-columns: repeat(2, minmax(77px, auto)); }
+      .wind-card { top: auto; bottom: 55px; right: 16px; }
+      .legend-line { display: none; }
+      .warning { max-width: 220px; line-height: 1.45; }
+    }
+  </style>
+</head>
+<body>
+  <main data-lightbench-stage aria-label="Autonomous vertical landing toy simulation">
+    <svg class="scene" id="scene" viewBox="0 0 1000 700" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="groundGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#17313a"/>
+          <stop offset="1" stop-color="#08131b"/>
+        </linearGradient>
+        <linearGradient id="bodyGradient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#d9f5ee"/>
+          <stop offset=".45" stop-color="#76b9b6"/>
+          <stop offset="1" stop-color="#305c6b"/>
+        </linearGradient>
+        <linearGradient id="noseGradient" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#a6eee1"/>
+          <stop offset="1" stop-color="#4d8f99"/>
+        </linearGradient>
+        <linearGradient id="plumeGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#fff4be"/>
+          <stop offset=".28" stop-color="#ffb851"/>
+          <stop offset="1" stop-color="#ee5a52" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="7" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="15"/>
+        </filter>
+      </defs>
+
+      <g opacity=".23" stroke="#87c9c4" stroke-width="1">
+        <path d="M0 110H1000M0 210H1000M0 310H1000M0 410H1000" stroke-dasharray="2 14"/>
+        <path d="M110 0V590M260 0V590M410 0V590M590 0V590M740 0V590M890 0V590" stroke-dasharray="2 18"/>
+      </g>
+      <g id="altitudeTicks" opacity=".42" fill="#91aaa9" font-size="10" letter-spacing="1">
+        <path d="M38 118h18M38 238h18M38 358h18M38 478h18" stroke="#91aaa9" stroke-width="1"/>
+        <text x="65" y="122">120</text><text x="65" y="242">80</text>
+        <text x="65" y="362">40</text><text x="65" y="482">0</text>
+      </g>
+
+      <g id="padGroup">
+        <ellipse id="padGlow" cx="500" cy="590" rx="120" ry="17" fill="#53dfc0" opacity=".06" filter="url(#softGlow)"/>
+        <path id="pad" d="M0 0h200" stroke="#72c9bd" stroke-width="9" stroke-linecap="round"/>
+        <path id="padInner" d="M0 0h200" stroke="#d6fff0" stroke-width="2" stroke-dasharray="2 12" stroke-linecap="round" opacity=".8"/>
+        <circle id="padCenter" cy="590" r="5" fill="#b5fff0" opacity=".85"/>
+      </g>
+      <path d="M0 590H1000V700H0Z" fill="url(#groundGradient)"/>
+      <path d="M0 590H1000" stroke="#6eb4ac" stroke-width="2" opacity=".7"/>
+      <path d="M0 610Q90 595 180 615T360 608T540 615T720 604T900 614T1080 605" fill="none" stroke="#28606a" stroke-width="2" opacity=".65"/>
+      <g opacity=".44" fill="#4e8f91">
+        <path d="M80 650h80l-12-8H91zM340 675h140l-15-8H354zM725 640h112l-13-7H740zM900 682h57l-9-6h-42z"/>
+      </g>
+
+      <g id="rocket" transform="translate(500 400)">
+        <g id="crashMark" opacity="0">
+          <path d="M-74-20l17 22-27 12 28 3-10 29M68-21L53 4l27 8-30 7 11 24" fill="none" stroke="#ff6d6d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="0" cy="-20" r="58" fill="#ff6d6d" opacity=".08" filter="url(#softGlow)"/>
+        </g>
+        <g id="rocketBody">
+          <path d="M-22-22L-39-5  -31 4 -20-3M22-22L39-5 31 4 20-3" fill="#4b8187" stroke="#b3eee3" stroke-width="2"/>
+          <path d="M-22-103Q0-132 22-103V-22Q0-13-22-22Z" fill="url(#bodyGradient)" stroke="#c8fff1" stroke-width="2"/>
+          <path d="M-22-103Q0-129 22-103Z" fill="url(#noseGradient)" stroke="#c8fff1" stroke-width="2"/>
+          <path d="M-11-111Q0-121 11-111" fill="none" stroke="#e9fff6" stroke-width="2" opacity=".8"/>
+          <rect x="-12" y="-82" width="24" height="22" rx="8" fill="#0c2938" stroke="#a4f5e2" stroke-width="2"/>
+          <circle cx="-4" cy="-75" r="3" fill="#d5fff0" opacity=".8"/>
+          <path d="M-17-50H17M-17-42H17" stroke="#477b85" stroke-width="3"/>
+          <path d="M-19-25H19" stroke="#e6fff2" stroke-width="3" opacity=".8"/>
+          <path d="M-14-22L-31 0-44 4-31-27ZM14-22L31 0 44 4 31-27Z" fill="#43838a" stroke="#a8e6dc" stroke-width="2"/>
+          <path d="M-9-21L-16 0M9-21L16 0" stroke="#d6fff1" stroke-width="3"/>
+          <path id="leftLeg" d="M-15-22L-34 0M15-22L34 0" stroke="#d6fff1" stroke-width="4" stroke-linecap="round"/>
+          <path d="M-43 0h18M25 0h18" stroke="#d6fff1" stroke-width="4" stroke-linecap="round"/>
+          <rect x="-8" y="-19" width="16" height="7" rx="2" fill="#132c37" stroke="#8ddacf"/>
+          <g id="plume" transform="translate(0 0)">
+            <path d="M-8-9Q0 0 8-9L5 50Q0 65-5 50Z" fill="#ffbb4f" opacity=".28" filter="url(#glow)"/>
+            <path id="plumeCore" d="M-5-10Q0-1 5-10L3 38Q0 48-3 38Z" fill="url(#plumeGradient)"/>
+          </g>
+        </g>
+      </g>
+      <g id="touchdownRing" opacity="0">
+        <ellipse cx="500" cy="590" rx="44" ry="9" fill="none" stroke="#79edb1" stroke-width="3" stroke-dasharray="4 6"/>
+      </g>
+      <g id="outOfBoundsMarker" opacity="0">
+        <path d="M500 545v-38m0 0-12 13m12-13 12 13" stroke="#ff6d6d" stroke-width="3"/>
+        <text x="500" y="485" text-anchor="middle" fill="#ff6d6d" font-size="12" letter-spacing="2">TRACK LOST</text>
+      </g>
+    </svg>
+
+    <div class="hud" aria-live="polite">
+      <div class="readout"><span class="label">ALTITUDE</span><span class="value" id="altitudeValue">93.53 m</span></div>
+      <div class="readout"><span class="label">VY EST</span><span class="value" id="velocityValue">— m/s</span></div>
+      <div class="readout"><span class="label">FUEL</span><span class="value" id="fuelValue">0.65</span></div>
+      <div class="readout"><span class="label">PITCH</span><span class="value" id="pitchValue">−1.14°</span></div>
+      <div class="readout"><span class="label">STATUS</span><span class="value" id="statusValue">FLYING</span></div>
+      <div class="readout"><span class="label">T +</span><span class="value" id="timeValue">0.00 s</span></div>
+    </div>
+    <div class="wind-card"><span id="windArrow">→</span><span id="windValue">WIND 0.00 m/s</span></div>
+    <div class="warning">Educational toy simulation · not for real flight</div>
+    <div class="legend-line">FIXED STEP / SENSOR-ONLY GUIDANCE</div>
+  </main>
+
+  <script type="module">
+    import { classify, makeSensor, stepPhysics } from "./sim.mjs";
+    import { createController } from "./controller.mjs";
+
+    const INITIAL_STATE = {
+      t: 0,
+      x: -4.848067389801145,
+      y: 93.528570109047,
+      vx: -2.5883225183933973,
+      vy: -20.121918114367872,
+      theta: -0.019816360780969267,
+      omega: -0.005490666888654239,
+      fuel: 0.65,
+      throttleActual: 0,
+      gimbalActual: 0,
+    };
+    const PARAMS = {
+      g: 9.81, aMax: 22, K: 8, C: 0.8, windAmp: 0.2, gustAmp: 0.08,
+      dragCoeff: 0.0025, padX: 0, padHalf: 6, fuel0: 0.65, phase: 2.503617682388614,
+    };
+    const DT = 0.02;
+    const STEPS_PER_FRAME = 5;
+    const stage = document.querySelector("[data-lightbench-stage]");
+    const scene = document.querySelector("#scene");
+    const rocket = document.querySelector("#rocket");
+    const rocketBody = document.querySelector("#rocketBody");
+    const plume = document.querySelector("#plume");
+    const plumeCore = document.querySelector("#plumeCore");
+    const crashMark = document.querySelector("#crashMark");
+    const touchdownRing = document.querySelector("#touchdownRing");
+    const outOfBoundsMarker = document.querySelector("#outOfBoundsMarker");
+    const pad = document.querySelector("#pad");
+    const padInner = document.querySelector("#padInner");
+    const padCenter = document.querySelector("#padCenter");
+    const padGlow = document.querySelector("#padGlow");
+    const values = {
+      altitude: document.querySelector("#altitudeValue"),
+      velocity: document.querySelector("#velocityValue"),
+      fuel: document.querySelector("#fuelValue"),
+      pitch: document.querySelector("#pitchValue"),
+      status: document.querySelector("#statusValue"),
+      time: document.querySelector("#timeValue"),
+      wind: document.querySelector("#windValue"),
+      windArrow: document.querySelector("#windArrow"),
+    };
+
+    let state = { ...INITIAL_STATE };
+    let command = { throttle: 0, gimbal: 0 };
+    let status = classify(state, PARAMS);
+    let eventLog = [];
+    let controller = createController();
+    let animationId = 0;
+    let generation = 0;
+    let running = false;
+    let runResolve = null;
+
+    const copy = value => {
+      if (typeof structuredClone === "function") return structuredClone(value);
+      return JSON.parse(JSON.stringify(value));
+    };
+    const round = value => Math.round(value * 100) / 100;
+    const signed = (value, digits = 2) => {
+      const fixed = Math.abs(value).toFixed(digits);
+      return `${value < 0 ? "−" : "+"}${fixed}`;
+    };
+    const windAt = t => PARAMS.windAmp * Math.sin(0.07 * t + PARAMS.phase) +
+      PARAMS.gustAmp * Math.sin(2.3 * t + 0.5 * PARAMS.phase);
+    const currentSensor = () => makeSensor(state, PARAMS);
+    const latestStatus = () => eventLog.length ? eventLog[eventLog.length - 1].status : classify(state, PARAMS);
+
+    function finishRun(token) {
+      if (token !== generation || !runResolve) return;
+      const resolve = runResolve;
+      runResolve = null;
+      running = false;
+      // One extra browser frame makes the terminal state visibly committed
+      // before the public Promise settles.
+      animationId = requestAnimationFrame(() => {
+        if (token !== generation) return;
+        render();
+        resolve(snapshot());
+      });
+    }
+
+    function tick(token) {
+      if (token !== generation || !running) return;
+      for (let i = 0; i < STEPS_PER_FRAME && status === "flying"; i += 1) {
+        if (i === 0) command = controller.step(currentSensor());
+        const usedControl = { ...command };
+        const nextState = stepPhysics(state, usedControl, PARAMS);
+        const nextSensor = makeSensor(nextState, PARAMS);
+        const nextStatus = classify(nextState, PARAMS);
+        state = nextState;
+        status = nextStatus;
+        eventLog.push({
+          step: eventLog.length,
+          state: { ...nextState },
+          sensor: { ...nextSensor },
+          control: usedControl,
+          status: nextStatus,
+        });
+      }
+      render();
+      if (status !== "flying") {
+        finishRun(token);
+        return;
+      }
+      animationId = requestAnimationFrame(() => tick(token));
+    }
+
+    function run() {
+      if (running) return new Promise(resolve => { runResolve = resolve; });
+      if (status !== "flying") return Promise.resolve(snapshot());
+      running = true;
+      const token = generation;
+      return new Promise(resolve => {
+        runResolve = resolve;
+        animationId = requestAnimationFrame(() => tick(token));
+      });
+    }
+
+    function reset() {
+      generation += 1;
+      if (animationId) cancelAnimationFrame(animationId);
+      animationId = 0;
+      if (runResolve) {
+        const resolve = runResolve;
+        runResolve = null;
+        resolve(snapshot());
+      }
+      running = false;
+      state = { ...INITIAL_STATE };
+      command = { throttle: 0, gimbal: 0 };
+      status = classify(state, PARAMS);
+      eventLog = [];
+      controller = createController();
+      render();
+      return snapshot();
+    }
+
+    function snapshot() {
+      const sensor = currentSensor();
+      return copy({
+        state: { ...state },
+        sensor: { ...sensor },
+        control: { ...command },
+        status: latestStatus(),
+        eventLog,
+      });
+    }
+
+    function telemetry() {
+      const record = eventLog.length ? eventLog[eventLog.length - 1] : {
+        step: -1, state: { ...state }, sensor: currentSensor(), control: { ...command }, status: latestStatus(),
+      };
+      return copy({ ...record, eventLog });
+    }
+
+    function render() {
+      const frameStatus = latestStatus();
+      const scaleX = 21;
+      const groundY = 590;
+      const scaleY = 3.55;
+      const px = 500 + (state.x - PARAMS.padX) * scaleX;
+      const py = groundY - state.y * scaleY;
+      const thetaDegrees = state.theta * 180 / Math.PI;
+      const visualY = Math.min(585, Math.max(38, py));
+      rocket.setAttribute("transform", `translate(${px.toFixed(2)} ${visualY.toFixed(2)}) rotate(${thetaDegrees.toFixed(3)})`);
+
+      const flameLength = 25 + 105 * Math.max(0, Math.min(1, state.throttleActual));
+      plume.setAttribute("transform", `translate(0 ${Math.max(0, flameLength - 25).toFixed(2)})`);
+      plumeCore.setAttribute("d", `M-5-10Q0-1 5-10L3 ${flameLength - 8}Q0 ${flameLength + 3}-3 ${flameLength - 8}Z`);
+      plume.style.opacity = state.fuel > 0 && frameStatus === "flying" ? String(.22 + .78 * state.throttleActual) : "0";
+
+      const padLeft = 500 + (PARAMS.padX - PARAMS.padHalf) * scaleX;
+      const padRight = 500 + (PARAMS.padX + PARAMS.padHalf) * scaleX;
+      [pad, padInner].forEach(line => line.setAttribute("d", `M${padLeft.toFixed(2)} 0H${padRight.toFixed(2)}`));
+      padCenter.setAttribute("cx", (500 + PARAMS.padX * scaleX).toFixed(2));
+      padGlow.setAttribute("cx", (500 + PARAMS.padX * scaleX).toFixed(2));
+      padGlow.setAttribute("rx", (PARAMS.padHalf * scaleX * 0.72).toFixed(2));
+
+      const landed = frameStatus === "landed";
+      const failure = frameStatus !== "flying" && !landed;
+      touchdownRing.setAttribute("opacity", landed ? "1" : "0");
+      touchdownRing.setAttribute("transform", `translate(${500 + PARAMS.padX * scaleX - 500} 0)`);
+      crashMark.setAttribute("opacity", failure ? "1" : "0");
+      outOfBoundsMarker.setAttribute("opacity", frameStatus === "out-of-bounds" ? "1" : "0");
+      rocketBody.setAttribute("opacity", frameStatus === "out-of-bounds" ? ".20" : "1");
+      const tint = landed ? "#79edb1" : failure ? "#ff6d6d" : "#6de0cc";
+      pad.setAttribute("stroke", tint);
+      padInner.setAttribute("stroke", landed ? "#d6fff0" : tint);
+      padGlow.setAttribute("fill", tint);
+      stage.classList.toggle("status-landed", landed);
+      stage.classList.toggle("status-failure", failure);
+      stage.classList.toggle("status-timeout", frameStatus === "timeout");
+
+      const sensor = currentSensor();
+      const vyEstimate = eventLog.length > 1 ?
+        (sensor.altitude - eventLog[eventLog.length - 2].sensor.altitude) /
+          Math.max(DT * STEPS_PER_FRAME, sensor.t - eventLog[eventLog.length - 2].sensor.t) : null;
+      const wind = windAt(state.t);
+      values.altitude.textContent = `${Math.max(0, sensor.altitude).toFixed(2)} m`;
+      values.velocity.textContent = vyEstimate === null ? "— m/s" : `${signed(vyEstimate)} m/s`;
+      values.fuel.textContent = sensor.fuel.toFixed(2);
+      values.pitch.textContent = `${signed(thetaDegrees)}°`;
+      values.status.textContent = frameStatus.toUpperCase();
+      values.time.textContent = `0${Math.max(0, state.t).toFixed(2)} s`;
+      values.wind.textContent = `WIND ${Math.abs(wind).toFixed(2)} m/s`;
+      values.windArrow.textContent = wind < -0.005 ? "←" : wind > 0.005 ? "→" : "·";
+      values.windArrow.style.color = Math.abs(wind) > .18 ? "#ffbd68" : "#6de0cc";
+    }
+
+    window.__LIGHTBENCH__ = { reset, run, snapshot, telemetry };
+    render();
+  </script>
+</body>
+</html>

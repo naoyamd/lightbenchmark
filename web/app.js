@@ -12,10 +12,10 @@ const showcaseSessions = new WeakMap();
 const showcaseMarker = '__LIGHTBENCH_ASSET_ROOT_9b41c8__';
 
 const taskDefinitions = [
-  { id: 'japanese-chat', number: '01', title: '日本語チャット', summary: '閉本で答え、資料を読んだ後に自分の誤りを訂正する。' },
-  { id: 'color-cascade-18', number: '02', title: 'ぷよぷよ風・18連鎖全消し', summary: '丸い色ぷよが落ちる6列盤で、実ロジックによる18連鎖と全消しを再演する。', visualVersion: 'PUYO-1.4' },
-  { id: 'prism-twist', number: '03', title: '3×3 ルービックキューブ', summary: '標準6色・黒い境界の3×3キューブを、実際の面回転だけで揃える。', visualVersion: 'CUBE-1.3' },
-  { id: 'lander-pop', number: '04', title: 'ロケット垂直着陸・自動制御', summary: '突風・抗力・アクチュエータ遅れの中で自動制御し、着陸・墜落・転倒まで実状態で見せる。', visualVersion: 'LANDER-2.0' },
+  { id: 'japanese-chat', number: '01', title: '日本語チャット', summary: '閉本で答え、資料を読んだ後に自分の誤りを訂正する。', promptVersion: 'JP-1.1' },
+  { id: 'color-cascade-18', number: '02', title: 'ぷよぷよ風・18連鎖全消し', summary: '丸い色ぷよが落ちる6列盤で、実ロジックによる18連鎖と全消しを再演する。', visualVersion: 'PUYO-1.5', promptVersion: 'PUYO-1.5' },
+  { id: 'prism-twist', number: '03', title: '3×3 ルービックキューブ', summary: '標準6色・黒い境界の3×3キューブを、実際の面回転だけで揃える。', visualVersion: 'CUBE-1.4', promptVersion: 'CUBE-1.4' },
+  { id: 'lander-pop', number: '04', title: 'ロケット垂直着陸・自動制御', summary: '突風・抗力・アクチュエータ遅れの中で自動制御し、着陸・墜落・転倒まで実状態で見せる。', visualVersion: 'LANDER-2.1', promptVersion: 'LANDER-2.1' },
 ];
 
 const labels = {
@@ -96,20 +96,46 @@ function demoMessage(run) {
     : '';
 }
 
-function evaluationSummary(run) {
-  if (run.evaluation === null || run.evaluation === undefined) return '<section class="evaluation-summary"><h3>独立評価</h3><p>取得不能</p></section>';
-  if (typeof run.evaluation !== 'object') return `<section class="evaluation-summary"><h3>独立評価</h3><p>${text(run.evaluation)}</p></section>`;
-  let passes = [run.evaluation.headline, run.evaluation.logic, run.evaluation.robustness]
-    .map(item => item?.pass).filter(value => typeof value === 'boolean');
-  if (!passes.length && run.evaluation.deterministicChecks) {
-    passes = Object.values(run.evaluation.deterministicChecks)
-      .map(item => item?.pass ?? item?.formatPass).filter(value => typeof value === 'boolean');
+function secondaryVerdict(value) {
+  if (!value || typeof value !== 'object') return null;
+  const passes = ['headline', 'logic', 'robustness']
+    .map(key => value[key]?.pass).filter(item => typeof item === 'boolean');
+  if (!passes.length) return null;
+  return passes.every(Boolean) ? '成功' : passes.some(Boolean) ? '部分達成' : '失敗';
+}
+
+function secondaryValue(value) {
+  if (value === null || value === undefined) return '取得不能';
+  if (typeof value === 'boolean') return value ? '成功' : '失敗';
+  if (typeof value === 'number') return formatNumber(value);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') {
+    if (typeof value.pass === 'boolean') return value.pass ? '成功' : '失敗';
+    if (typeof value.status === 'string') return value.status;
+    const scores = ['clarity', 'delight', 'trust']
+      .filter(key => value[key] !== null && value[key] !== undefined)
+      .map(key => `${key}: ${formatNumber(value[key])}`);
+    if (scores.length) return scores.join(' / ');
+    const verdict = secondaryVerdict(value);
+    if (verdict) return verdict;
   }
-  const verdict = passes.length && passes.every(Boolean) ? '成功'
-    : passes.some(Boolean) ? '部分達成'
-      : passes.length ? '失敗' : '判定不能';
-  const reason = run.evaluation.headline?.reason;
-  return `<section class="evaluation-summary"><h3>独立評価</h3><p><strong>${verdict}</strong> · ${text(run.evaluation.status ?? '記録あり')}${reason ? `<br>${text(reason)}` : ''}</p></section>`;
+  return JSON.stringify(value);
+}
+
+function evaluationSummary(run) {
+  const evaluation = run.evaluation;
+  const logic = evaluation?.logic ?? evaluation?.independentEvaluator?.logic;
+  const replay = evaluation?.replay;
+  const experience = evaluation?.experience;
+  const status = evaluation?.status;
+  return `<section class="evaluation-summary"><h3>副評価</h3>
+    <dl class="secondary-metrics">
+      ${metric('logic', secondaryValue(logic))}
+      ${metric('replay', secondaryValue(replay))}
+      ${metric('experience', secondaryValue(experience))}
+    </dl>
+    ${status ? `<p class="secondary-status">評価記録: ${text(status)}</p>` : ''}
+  </section>`;
 }
 
 function showcaseMarkup(run, compact = false) {
@@ -142,10 +168,62 @@ function sortedNewest(items) {
   return [...items].sort((first, second) => runTime(second) - runTime(first) || String(second.runId).localeCompare(String(first.runId)));
 }
 
+function selectLatestCohort(modelRuns) {
+  const groups = new Map();
+  for (const run of modelRuns) {
+    const id = run.cohortId ?? '';
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(run);
+  }
+  const ranked = [...groups.entries()].sort((first, second) => {
+    const firstTasks = new Set(first[1].map(run => run.taskId).filter(taskId => taskDefinitions.some(task => task.id === taskId))).size;
+    const secondTasks = new Set(second[1].map(run => run.taskId).filter(taskId => taskDefinitions.some(task => task.id === taskId))).size;
+    const firstComplete = firstTasks === taskDefinitions.length;
+    const secondComplete = secondTasks === taskDefinitions.length;
+    return Number(secondComplete) - Number(firstComplete)
+      || Math.max(...second[1].map(runTime), 0) - Math.max(...first[1].map(runTime), 0)
+      || String(second[0]).localeCompare(String(first[0]));
+  });
+  const [id, cohortRuns] = ranked[0] ?? ['', []];
+  return { id, runs: cohortRuns };
+}
+
+function latestTaskRuns(cohortRuns) {
+  return taskDefinitions.map(definition => sortedNewest(cohortRuns.filter(run => run.taskId === definition.id))[0]).filter(Boolean);
+}
+
+function aggregateValue(runs, getter) {
+  if (runs.length !== taskDefinitions.length) return null;
+  const values = runs.map(getter);
+  return values.every(value => typeof value === 'number' && Number.isFinite(value))
+    ? values.reduce((sum, value) => sum + value, 0)
+    : null;
+}
+
+function modelSummary(model, cohort, selectedRuns) {
+  const newest = sortedNewest(selectedRuns)[0];
+  return `<section class="model-summary" data-model-id="${text(model.modelId)}" data-cohort-id="${text(cohort.id)}">
+    <div class="summary-identity"><span class="summary-kicker">MODEL</span><strong>${text(model.modelId)}</strong><span class="summary-kicker">COHORT</span><strong>${text(cohort.id)}</strong><small>${selectedRuns.length} / ${taskDefinitions.length} task records</small></div>
+    <dl class="summary-metrics">
+      ${metric('4run合計トークン', formatNumber(aggregateValue(selectedRuns, run => run.usage?.total?.totalTokens)))}
+      ${metric('4run合計サブエージェント', formatNumber(aggregateValue(selectedRuns, run => run.agents?.spawned)))}
+      ${metric('実行日時', formatDate(newest?.execution?.startedAt ?? newest?.execution?.endedAt))}
+      ${metric('4run合計時間', formatDuration(aggregateValue(selectedRuns, run => run.execution?.durationMs)))}
+    </dl>
+    ${selectedRuns.length < taskDefinitions.length ? `<p class="cohort-warning">このcohortの欠損セルは、過去cohortから補完していません。</p>` : ''}
+    <p class="candidate-note">候補snapshotは正式判定に使用しません。</p>
+  </section>`;
+}
+
+function statusLabel(run) {
+  return run?.runKind === 'debug' ? 'DEBUG・判定不能' : run?.status ?? '判定不能';
+}
+
 function statusBadge(run) {
   if (run.demo === true || run.isDemo === true) return '<span class="badge demo-badge">DEMO</span>';
-  if (run.runKind === 'debug') return '<span class="badge debug-badge">DEBUG · INCONCLUSIVE</span>';
-  return `<span class="badge">${text(run.status)}</span>`;
+  const status = statusLabel(run);
+  const className = run.runKind === 'debug' ? 'debug-badge' : `status-${String(run.status ?? 'inconclusive').replace(/[^a-z0-9-]/gi, '-')}`;
+  return `<span class="badge ${className}" data-primary-status="${text(status)}">${text(status)}</span>`;
 }
 
 function visualContract(definition, run) {
@@ -160,32 +238,37 @@ function visualContract(definition, run) {
 function previousAttempts(items, primary) {
   const previous = sortedNewest(items).filter(run => run !== primary);
   if (!previous.length) return '';
-  return `<details class="attempts"><summary>以前の試行 ${previous.length}件</summary><ul>${previous.map(run => `<li><span>${formatDate(run.execution?.startedAt ?? run.execution?.endedAt)} · ${text(run.versions?.prompt)} · ${text(run.status)}</span><button type="button" data-run-index="${runs.indexOf(run)}">記録</button></li>`).join('')}</ul></details>`;
+  return `<details class="attempts"><summary>過去試行 ${previous.length}件</summary><ul>${previous.map(run => `<li><span><strong class="legacy-note">旧評価方式・再演未検証</strong><br>${formatDate(run.execution?.startedAt ?? run.execution?.endedAt)} · cohort ${text(run.cohortId)} · ${text(run.versions?.prompt)} · ${text(statusLabel(run))}</span><button type="button" data-run-index="${runs.indexOf(run)}">記録</button></li>`).join('')}</ul></details>`;
 }
 
-function taskResult(definition, modelRuns) {
-  const attempts = modelRuns.filter(run => run.taskId === definition.id);
-  const run = sortedNewest(attempts)[0];
-  const promptLabel = run && definition.visualVersion && run.versions?.prompt !== definition.visualVersion ? '修正版prompt' : '完成版prompt';
+function isLegacyRun(definition, run) {
+  return run.legacy === true || run.evaluation?.legacy === true
+    || (definition.promptVersion && run.versions?.prompt && run.versions.prompt !== definition.promptVersion);
+}
+
+function legacyRunNotice(definition, run) {
+  return isLegacyRun(definition, run)
+    ? '<p class="legacy-note legacy-warning"><strong>旧評価方式・再演未検証</strong> · このrunの評価方式は現行cohortと比較できません。</p>'
+    : '';
+}
+
+function taskResult(definition, cohortRuns, allModelRuns) {
+  const attempts = allModelRuns.filter(run => run.taskId === definition.id);
+  const run = sortedNewest(cohortRuns.filter(item => item.taskId === definition.id))[0];
+  const promptLabel = run && definition.promptVersion && run.versions?.prompt !== definition.promptVersion ? '修正版prompt' : '完成版prompt';
   if (!run) {
-    return `<article class="task-result" id="task-${definition.id}"><header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><a href="./prompts/${definition.id}.prompt.html">完成版prompt ↗</a></header><p class="showcase-empty">このモデルの実行結果はまだありません。</p></article>`;
+    return `<article class="task-result task-missing" id="task-${definition.id}"><header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><div class="task-heading-meta"><a href="./prompts/${definition.id}.prompt.html">完成版prompt ↗</a><div class="primary-verdict"><span>正式判定</span><span class="badge">欠損 · 判定不能</span></div></div></header><p class="showcase-empty">このcohortに実行結果がありません。過去cohortから補完していません。</p></article>`;
   }
-  const total = run.usage?.total;
   return `<article class="task-result" id="task-${definition.id}">
-    <header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><a href="./prompts/${definition.id}.prompt.html">${promptLabel} ↗</a></header>
-    ${showcaseMarkup(run)}
-    ${visualContract(definition, run)}
+    <header class="task-heading"><p>${definition.number}</p><div><h2>${definition.title}</h2><span>${definition.summary}</span></div><div class="task-heading-meta"><a href="./prompts/${definition.id}.prompt.html">${promptLabel} ↗</a><div class="primary-verdict"><span>正式判定</span>${statusBadge(run)}</div></div></header>
+    ${showcaseMarkup(run, true)}
     ${evaluationSummary(run)}
-    ${artifactGallery(run)}
-    <div class="run-head"><div><strong>model: ${text(run.model?.displayName)}</strong><span>modelId: ${text(run.model?.modelId)}</span></div>${statusBadge(run)}</div>
-    <dl class="metrics">
-      ${metric('合計トークン', formatNumber(total?.totalTokens))}
-      ${metric('サブエージェント', formatNumber(run.agents?.spawned))}
-      ${metric('実行日時', formatDate(run.execution?.startedAt ?? run.execution?.endedAt))}
-      ${metric('実行時間', formatDuration(run.execution?.durationMs))}
-    </dl>
-    <div class="record-actions"><span>run: ${text(run.runId)}</span><button class="detail-button" type="button" data-run-index="${runs.indexOf(run)}">usage・ハッシュ・評価記録</button></div>
-    ${previousAttempts(attempts, run)}
+    ${legacyRunNotice(definition, run)}
+    <details class="task-details"><summary>詳細・過去試行</summary>
+      ${visualContract(definition, run)}${artifactGallery(run)}
+      <div class="record-actions"><span>run: ${text(run.runId)}</span><button class="detail-button" type="button" data-run-index="${runs.indexOf(run)}">usage・ハッシュ・評価記録</button></div>
+      ${previousAttempts(attempts, run)}
+    </details>
   </article>`;
 }
 
@@ -207,13 +290,15 @@ function renderModelPage(modelId) {
     results.innerHTML = `<div class="error">モデル「${text(modelId)}」の結果が見つかりません。</div>`;
     return;
   }
+  const cohort = selectLatestCohort(modelRuns);
+  const selectedRuns = latestTaskRuns(cohort.runs);
   const model = sortedNewest(modelRuns)[0].model;
   document.body.classList.add('model-page');
   pageNav.hidden = false;
   pageTitle.innerHTML = `${text(model.displayName)}<span>の4課題。</span>`;
-  pageLede.textContent = `${model.modelId} の実演を先に表示し、独立評価の記録をあわせて確認できます。`;
+  pageLede.textContent = '同一cohortだけを表示。実演を先に、正式判定と副評価をあわせて確認できます。';
   results.className = 'model-results';
-  results.innerHTML = taskDefinitions.map(definition => taskResult(definition, modelRuns)).join('');
+  results.innerHTML = `${modelSummary(model, cohort, selectedRuns)}<section class="task-grid" aria-label="4課題">${taskDefinitions.map(definition => taskResult(definition, cohort.runs, modelRuns)).join('')}</section>`;
   bindResultActions();
   mountModelShowcases();
 }
@@ -230,12 +315,13 @@ function renderModelIndex() {
   pageLede.textContent = 'カードを選ぶと、そのモデルの日本語・ぷよぷよ風ゲーム・3×3キューブ・ロケット着陸を1ページで追えます。';
   results.className = 'model-index';
   results.innerHTML = entries.map(items => {
-    const newest = sortedNewest(items)[0];
+    const cohort = selectLatestCohort(items);
+    const newest = sortedNewest(cohort.runs)[0] ?? sortedNewest(items)[0];
     const taskIds = new Set(taskDefinitions.map(({ id }) => id));
-    const taskRuns = items.filter(run => taskIds.has(run.taskId));
+    const taskRuns = cohort.runs.filter(run => taskIds.has(run.taskId));
     const completedTasks = new Set(taskRuns.map(run => run.taskId)).size;
     const visibleTasks = new Set(taskRuns.filter(run => ['live', 'chat'].includes(showcaseKind(run))).map(run => run.taskId)).size;
-    return `<a class="model-card" href="${text(newest.model.pageUrl)}"><p class="model-card-kicker">MODEL</p><h2>${text(newest.model.displayName)}</h2><p>${text(newest.model.modelId)}</p><dl><div><dt>収録課題</dt><dd>${completedTasks} / 4</dd></div><div><dt>結果表示</dt><dd>${visibleTasks} / 4</dd></div><div><dt>最新実行</dt><dd>${formatDate(newest.execution?.startedAt ?? newest.execution?.endedAt)}</dd></div></dl><strong>4課題をまとめて見る →</strong></a>`;
+    return `<a class="model-card" href="${text(newest.model.pageUrl)}"><p class="model-card-kicker">MODEL</p><h2>${text(newest.model.displayName)}</h2><p>${text(newest.model.modelId)}</p><dl><div><dt>収録課題</dt><dd>${completedTasks} / 4</dd></div><div><dt>結果表示</dt><dd>${visibleTasks} / 4</dd></div><div><dt>最新cohort</dt><dd>${text(cohort.id)}</dd></div></dl><strong>4課題をまとめて見る →</strong></a>`;
   }).join('') || '<div class="empty">まだモデルの結果がありません。</div>';
 }
 
@@ -465,7 +551,7 @@ function openDetail(run) {
   const title = `${run.model?.displayName ?? 'モデル'} / ${run.runId}`;
   const detailShowcase = showcaseKind(run) === 'chat' ? showcaseMarkup(run, true) : '';
   detailContent.innerHTML = `<h2 id="detail-title">${text(title)}</h2>${demoMessage(run)}${detailShowcase}${evaluationSummary(run)}${artifactGallery(run)}
-    ${detailList([['runId', run.runId], ['cohortId', run.cohortId], ['taskId', run.taskId], ['runKind', run.runKind], ['status', run.status]])}
+    ${detailList([['runId', run.runId], ['cohortId', run.cohortId], ['taskId', run.taskId], ['runKind', run.runKind], ['status', statusLabel(run)]])}
     <h3>モデル</h3>${detailList(Object.entries(run.model ?? {}).map(([key, value]) => [key, value]))}
     <h3>実行</h3>${detailList(Object.entries(run.execution ?? {}).map(([key, value]) => [key, key.endsWith('At') ? formatDate(value) : key === 'durationMs' ? formatDuration(value) : value]))}
     <h3>使用量</h3>${usageSection('ルート', run.usage?.root)}${usageSection('サブエージェント', run.usage?.subagents)}${usageSection('合計', run.usage?.total)}

@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3×3 Cube</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #eef4fa;
+      --muted: #9aa9b8;
+      --panel: rgba(9, 16, 24, .68);
+      --edge: rgba(203, 226, 244, .18);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { width: 100%; height: 100%; margin: 0; }
+
+    body {
+      overflow: hidden;
+      background: #081019;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    [data-lightbench-stage] {
+      position: relative;
+      isolation: isolate;
+      width: 100vw;
+      height: 100vh;
+      min-height: 420px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      perspective: 1100px;
+      background:
+        radial-gradient(circle at 50% 43%, rgba(67, 103, 129, .22), transparent 30%),
+        radial-gradient(circle at 50% 42%, #172a39 0, #0b1722 43%, #060b11 100%);
+    }
+
+    [data-lightbench-stage]::before,
+    [data-lightbench-stage]::after {
+      position: absolute;
+      content: "";
+      pointer-events: none;
+      border-radius: 50%;
+      border: 1px solid rgba(175, 213, 237, .08);
+      transform: translate(-50%, -50%) rotateX(68deg);
+      left: 50%;
+      top: 54%;
+    }
+
+    [data-lightbench-stage]::before {
+      width: min(78vmin, 650px);
+      height: min(29vmin, 235px);
+      box-shadow: 0 0 90px rgba(69, 186, 210, .11);
+    }
+
+    [data-lightbench-stage]::after {
+      width: min(57vmin, 470px);
+      height: min(21vmin, 170px);
+      border-color: rgba(255, 255, 255, .06);
+    }
+
+    .scene {
+      position: relative;
+      z-index: 1;
+      width: min(76vmin, 540px);
+      height: min(76vmin, 540px);
+      display: grid;
+      place-items: center;
+      transform-style: preserve-3d;
+    }
+
+    .cube {
+      --cubie: clamp(52px, 18vmin, 88px);
+      --gap: clamp(3px, .72vmin, 7px);
+      --pitch: calc(var(--cubie) + var(--gap));
+      position: relative;
+      width: calc(var(--cubie) * 3 + var(--gap) * 2);
+      height: calc(var(--cubie) * 3 + var(--gap) * 2);
+      transform: rotateX(-24deg) rotateY(-34deg) rotateZ(.6deg);
+      transform-style: preserve-3d;
+    }
+
+    .is-complete .cube {
+      filter: drop-shadow(0 0 19px rgba(112, 236, 195, .33));
+    }
+
+    .cubie {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: var(--cubie);
+      height: var(--cubie);
+      margin: calc(var(--cubie) / -2);
+      border: 1px solid #05080b;
+      border-radius: 8px;
+      background: #090d12;
+      box-shadow:
+        0 0 0 1px rgba(116, 141, 157, .12),
+        inset 0 0 13px rgba(0, 0, 0, .75);
+      transform-style: preserve-3d;
+    }
+
+    .sticker {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: calc(100% - 8px);
+      height: calc(100% - 8px);
+      border: 1px solid rgba(0, 0, 0, .33);
+      border-radius: 5px;
+      background: var(--sticker-color);
+      box-shadow:
+        inset 2px 2px 3px rgba(255, 255, 255, .27),
+        inset -3px -4px 7px rgba(0, 0, 0, .2),
+        0 0 3px rgba(0, 0, 0, .45);
+      backface-visibility: visible;
+    }
+
+    .sticker--front { transform: translateZ(calc(var(--cubie) / 2 + 1px)); }
+    .sticker--back { transform: rotateY(180deg) translateZ(calc(var(--cubie) / 2 + 1px)); }
+    .sticker--right { transform: rotateY(90deg) translateZ(calc(var(--cubie) / 2 + 1px)); }
+    .sticker--left { transform: rotateY(-90deg) translateZ(calc(var(--cubie) / 2 + 1px)); }
+    .sticker--top { transform: rotateX(90deg) translateZ(calc(var(--cubie) / 2 + 1px)); }
+    .sticker--bottom { transform: rotateX(-90deg) translateZ(calc(var(--cubie) / 2 + 1px)); }
+
+    .turn-layer {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 50% 0;
+      transform-style: preserve-3d;
+      pointer-events: none;
+    }
+
+    .hud {
+      position: absolute;
+      z-index: 2;
+      left: clamp(16px, 4vw, 46px);
+      bottom: clamp(16px, 4vw, 38px);
+      min-width: 202px;
+      padding: 11px 14px 12px;
+      border: 1px solid var(--edge);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: 0 12px 34px rgba(0, 0, 0, .2);
+      backdrop-filter: blur(9px);
+      color: var(--ink);
+      letter-spacing: .08em;
+      font-size: 10px;
+    }
+
+    .hud__row {
+      display: grid;
+      grid-template-columns: 62px 1fr;
+      gap: 12px;
+      align-items: center;
+      line-height: 1.7;
+    }
+
+    .hud__label { color: var(--muted); }
+    .hud__value { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+    .hud__value[data-solved="true"] { color: #7be7bd; }
+
+    @media (max-width: 560px) {
+      .scene { transform: translateY(-3vh) scale(.86); }
+      .hud { min-width: 185px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cube { filter: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" data-lightbench-stage aria-label="3×3 ルービックキューブ">
+    <div class="scene" aria-hidden="true">
+      <div class="cube" id="cube"></div>
+    </div>
+    <div class="hud" aria-live="polite">
+      <div class="hud__row"><span class="hud__label">MOVE</span><span class="hud__value" id="hud-move">—</span></div>
+      <div class="hud__row"><span class="hud__label">PHASE</span><span class="hud__value" id="hud-phase">READY</span></div>
+      <div class="hud__row"><span class="hud__label">SOLVED</span><span class="hud__value" id="hud-solved" data-solved="true">YES</span></div>
+      <div class="hud__row"><span class="hud__label">STEP</span><span class="hud__value" id="hud-step">00</span></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import {
+      applyMove,
+      createSolved,
+      generateScramble,
+      invertAlgorithm,
+      isSolved,
+    } from "./engine.mjs";
+
+    const stage = document.querySelector("[data-lightbench-stage]");
+    const cube = document.getElementById("cube");
+    const hudMove = document.getElementById("hud-move");
+    const hudPhase = document.getElementById("hud-phase");
+    const hudSolved = document.getElementById("hud-solved");
+    const hudStep = document.getElementById("hud-step");
+
+    const palette = ["#f7f8f4", "#e4513e", "#19b968", "#ffd928", "#f28a24", "#2377d1"];
+    const faces = [
+      { side: "top", normal: [0, 1, 0], right: [1, 0, 0], up: [0, 0, -1] },
+      { side: "right", normal: [1, 0, 0], right: [0, 0, -1], up: [0, 1, 0] },
+      { side: "front", normal: [0, 0, 1], right: [1, 0, 0], up: [0, 1, 0] },
+      { side: "bottom", normal: [0, -1, 0], right: [1, 0, 0], up: [0, 0, 1] },
+      { side: "left", normal: [-1, 0, 0], right: [0, 0, 1], up: [0, 1, 0] },
+      { side: "back", normal: [0, 0, -1], right: [-1, 0, 0], up: [0, 1, 0] },
+    ];
+    const visualMoves = {
+      U: { axis: "y", layer: 1, angle: 90 },
+      R: { axis: "x", layer: 1, angle: -90 },
+      F: { axis: "z", layer: 1, angle: -90 },
+      D: { axis: "y", layer: -1, angle: -90 },
+      L: { axis: "x", layer: -1, angle: 90 },
+      B: { axis: "z", layer: -1, angle: 90 },
+    };
+
+    let state = createSolved();
+    let scrambleTokens = [];
+    let eventLog = [];
+    let phase = "ready";
+    let activeMove = "—";
+    let generation = 0;
+    const activeAnimations = new Set();
+    const pendingFrames = new Map();
+
+    const keyOf = (point) => point.join(",");
+    const faceletPosition = (face, row, col) => [
+      face.normal[0] + (col - 1) * face.right[0] + (1 - row) * face.up[0],
+      face.normal[1] + (col - 1) * face.right[1] + (1 - row) * face.up[1],
+      face.normal[2] + (col - 1) * face.right[2] + (1 - row) * face.up[2],
+    ];
+
+    function updateHud() {
+      const solved = isSolved(state);
+      hudMove.textContent = activeMove;
+      hudPhase.textContent = phase.toUpperCase();
+      hudSolved.textContent = solved ? "YES" : "NO";
+      hudSolved.dataset.solved = String(solved);
+      hudStep.textContent = String(eventLog.length).padStart(2, "0");
+      stage.classList.toggle("is-complete", solved && phase === "solved");
+      stage.dataset.phase = phase;
+    }
+
+    function renderCube() {
+      const stickers = new Map();
+      for (let faceIndex = 0; faceIndex < faces.length; faceIndex += 1) {
+        const face = faces[faceIndex];
+        for (let row = 0; row < 3; row += 1) {
+          for (let col = 0; col < 3; col += 1) {
+            const point = faceletPosition(face, row, col);
+            const key = keyOf(point);
+            if (!stickers.has(key)) stickers.set(key, []);
+            stickers.get(key).push({ side: face.side, color: palette[state[faceIndex * 9 + row * 3 + col]] });
+          }
+        }
+      }
+
+      cube.replaceChildren();
+      for (let x = -1; x <= 1; x += 1) {
+        for (let y = -1; y <= 1; y += 1) {
+          for (let z = -1; z <= 1; z += 1) {
+            const cubie = document.createElement("div");
+            cubie.className = "cubie";
+            cubie.dataset.x = String(x);
+            cubie.dataset.y = String(y);
+            cubie.dataset.z = String(z);
+            cubie.style.transform = `translate3d(calc(${x} * var(--pitch)), calc(${-y} * var(--pitch)), calc(${z} * var(--pitch)))`;
+            for (const stickerData of stickers.get(`${x},${y},${z}`) ?? []) {
+              const sticker = document.createElement("div");
+              sticker.className = `sticker sticker--${stickerData.side}`;
+              sticker.style.setProperty("--sticker-color", stickerData.color);
+              cubie.append(sticker);
+            }
+            cube.append(cubie);
+          }
+        }
+      }
+    }
+
+    function waitForPaint(run) {
+      return new Promise(resolve => {
+        const frameId = requestAnimationFrame(() => {
+          pendingFrames.delete(frameId);
+          resolve(run === generation);
+        });
+        pendingFrames.set(frameId, resolve);
+      });
+    }
+
+    function cancelWork() {
+      for (const animation of Array.from(activeAnimations)) animation.cancel();
+      for (const [frameId, resolve] of Array.from(pendingFrames)) {
+        cancelAnimationFrame(frameId);
+        pendingFrames.delete(frameId);
+        resolve(false);
+      }
+    }
+
+    function startRun() {
+      generation += 1;
+      cancelWork();
+      return generation;
+    }
+
+    function logMove(token) {
+      eventLog.push({
+        seq: eventLog.length + 1,
+        token,
+        state: new Uint8Array(state),
+        solved: isSolved(state),
+      });
+    }
+
+    function animateTurn(token, run) {
+      if (run !== generation) return Promise.resolve(false);
+      const move = visualMoves[token[0]];
+      const suffix = token.slice(1);
+      const multiplier = suffix === "2" ? 2 : suffix === "'" ? -1 : 1;
+      const angle = move.angle * multiplier;
+      const targets = Array.from(cube.querySelectorAll(".cubie")).filter(cubie => Number(cubie.dataset[move.axis]) === move.layer);
+      const layer = document.createElement("div");
+      layer.className = "turn-layer";
+      layer.style.transform = `${move.axis === "x" ? "rotateX" : move.axis === "y" ? "rotateY" : "rotateZ"}(0deg)`;
+      cube.append(layer);
+      for (const target of targets) layer.append(target);
+      const transform = `${move.axis === "x" ? "rotateX" : move.axis === "y" ? "rotateY" : "rotateZ"}(${angle}deg)`;
+
+      return new Promise(resolve => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          activeAnimations.delete(animation);
+          animation.onfinish = null;
+          animation.oncancel = null;
+          if (layer.parentNode === cube) layer.remove();
+          resolve(run === generation);
+        };
+        let animation;
+        if (typeof layer.animate === "function") {
+          animation = layer.animate(
+            [{ transform: layer.style.transform }, { transform }],
+            { duration: 175, easing: "cubic-bezier(.22,.72,.22,1)", fill: "forwards" },
+          );
+          activeAnimations.add(animation);
+          animation.onfinish = finish;
+          animation.oncancel = finish;
+        } else {
+          layer.style.transform = transform;
+          animation = { cancel: finish, onfinish: null, oncancel: null };
+          activeAnimations.add(animation);
+          waitForPaint(run).then(finish);
+        }
+      });
+    }
+
+    function snapshot() {
+      return {
+        state: new Uint8Array(state),
+        phase,
+        move: activeMove,
+        solved: isSolved(state),
+        seq: eventLog.length,
+        scramble: scrambleTokens.slice(),
+        log: eventLog.map(entry => ({ ...entry, state: new Uint8Array(entry.state) })),
+      };
+    }
+
+    function log() {
+      return eventLog.map(entry => ({ ...entry, state: new Uint8Array(entry.state) }));
+    }
+
+    function reset() {
+      startRun();
+      state = createSolved();
+      scrambleTokens = [];
+      eventLog = [];
+      phase = "ready";
+      activeMove = "—";
+      renderCube();
+      updateHud();
+      return snapshot();
+    }
+
+    async function scramble() {
+      const run = startRun();
+      renderCube();
+      scrambleTokens = generateScramble(0x00C0FFEE, 12);
+      phase = "scrambling";
+      activeMove = "—";
+      updateHud();
+      for (const token of scrambleTokens) {
+        if (run !== generation) return snapshot();
+        activeMove = token;
+        state = applyMove(state, token);
+        logMove(token);
+        renderCube();
+        updateHud();
+        if (!await waitForPaint(run)) return snapshot();
+      }
+      if (run !== generation) return snapshot();
+      phase = "scrambled";
+      updateHud();
+      await waitForPaint(run);
+      return snapshot();
+    }
+
+    async function play() {
+      const run = startRun();
+      renderCube();
+      const solution = invertAlgorithm(scrambleTokens);
+      phase = "solving";
+      updateHud();
+      for (const token of solution) {
+        if (run !== generation) return snapshot();
+        activeMove = token;
+        updateHud();
+        if (!await animateTurn(token, run) || run !== generation) return snapshot();
+        state = applyMove(state, token);
+        logMove(token);
+        renderCube();
+        updateHud();
+        if (!await waitForPaint(run)) return snapshot();
+      }
+      if (run !== generation) return snapshot();
+      if (isSolved(state)) phase = "solved";
+      updateHud();
+      await waitForPaint(run);
+      return snapshot();
+    }
+
+    window.__LIGHTBENCH__ = { reset, scramble, play, snapshot, log };
+    reset();
+  </script>
+</body>
+</html>

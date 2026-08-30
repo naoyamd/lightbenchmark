@@ -14,14 +14,14 @@
 
 ## 日本語チャット
 
-- Turn 1: 正しい原子事実数、重大誤り、未確認断定、文字数、絵文字、4項目充足。
-- Turn 2: F1を含む4 Fact以上、訂正認識、カード外主張、形式。
-- Headline: Turn 1に重大誤りなし・正しい事実5個以上、Turn 2でF1を含む4 Fact以上、形式違反なし。
+- Turn 1: S1〜S6を閉本で`正`/`誤`判定し、短いギャル口調の旅行説明へ落とし込む。
+- Turn 2: 公式Fact Card F1〜F6を渡し、S1・S4・S6を含む誤りを意味内容まで訂正する。
+- truth/訂正は決定的評価、自然さ・キャラクター・読みやすさは匿名experience評価に分離する。
 
 ## ぷよぷよ風・18連鎖全消し
 
-- 候補自己申告ではなく`challenge.json`をreference resolverで評価する。
-- 72 cell、18 chain、各step 4 cell、最終0 cellをすべて必須とする。
+- 候補自己申告ではなく`challenge.json`の70 cell盤面へ公開pairを実際に`dropPair`する。
+- lock後72 cell、18 chain、各step 4 cell、最終0 cellをすべて必須とする。
 - 色置換、左右鏡映、決定的random boardでengineを差分検査する。
 
 ## 3×3 ルービックキューブ
@@ -34,11 +34,12 @@
 
 - 候補simを100 state/controlでoracleと比較する。
 - 候補controllerは評価器のoracle sim内でsensorだけを渡して実行する。
-- 公開scenario成功、非公開5件中4件以上の安全着陸をHeadlineとする。
+- 候補のscenario生成器は使わず、封印した完全な`state + params`を入力する。
+- 非公開scenarioの80%以上の安全着陸をHeadlineとし、time・fuel・各安全marginは合算せずraw値で公開する。
 
 ## Cohort
 
-hidden fixtureは実行前にhash commitmentを作り、cohort封印後に公開する。公開後に追加するモデルは別cohortにし、未公開fixtureを更新する。
+hidden fixtureとevaluatorは実行前にhash commitmentを作り、4課題を同一cohortで閉じた後にfixture本体と照合記録を公開する。公開後に追加するモデルは別cohortにし、未公開fixtureを更新する。モデルページは4課題が揃ったcohortを優先し、別cohortのrunを混在させない。
 
 ## 独立評価CLI
 
@@ -53,6 +54,6 @@ task-idは`color-cascade-18`、`prism-twist`、`lander-pop`。fixtureを省略�
 
 - Color Cascade: `{ "boards": [...], "pairs": [{"board": [...], "pair": {...}}] }`
 - Prism Twist: `{ "seeds": [{"seed": 1, "length": 25}], "algorithms": [["R","U"]] }`
-- Lander Pop: `{ "scenarios": [{"seed": 1, "overrides": {...}}], "physics": [{"state": {...}, "control": {...}, "params": {...}}] }`
+- Lander Pop: `{ "scenarios": [{"id": "scenario-1", "state": {...}, "params": {...}}], "physics": [{"state": {...}, "control": {...}, "params": {...}}] }`
 
 CLIはheadline、logic、robustnessを別々に返す。候補UIの操作性・animation・視覚表現は録画を匿名化し、experience rubricで別評価する。ぷよぷよ風は丸い色ぷよ・6列盤・2個組、3×3キューブは標準6色・正方形ステッカー・濃色のcubie境界を満たさないrunを視覚比較の対象外にする。
