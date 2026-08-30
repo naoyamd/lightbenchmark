@@ -77,7 +77,7 @@ h1 span { display: block; color: var(--accent); }
 
 .showcase { margin: 0 0 .65rem; padding: .45rem; border: 1px solid var(--line); border-radius: .55rem; background: #f7fafc; }
 .showcase h3, .evaluation-summary h3 { margin: 0 0 .5rem; color: var(--muted); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; }
-.showcase-visual { min-height: 0; height: clamp(10rem, 17vw, 15rem); display: grid; place-items: center; overflow: hidden; border-radius: .45rem; background: var(--surface-solid); }
+.showcase-visual { min-height: 0; height: clamp(32.5rem, 42vw, 34rem); display: grid; place-items: center; overflow: hidden; border-radius: .45rem; background: var(--surface-solid); }
 .showcase-loading { margin: 0; color: var(--muted); font-size: .85rem; }
 .showcase-controls { display: flex; align-items: center; gap: .5rem; padding: .45rem .1rem 0; }
 .showcase-button { padding: .45rem .7rem; border: 0; border-radius: .4rem; background: var(--accent); color: white; cursor: pointer; font-size: .78rem; font-weight: 900; }
