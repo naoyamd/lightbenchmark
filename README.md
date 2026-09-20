@@ -1,93 +1,85 @@
 # LightBenchmark
 
-LightBenchmarkは、小規模なAIモデルを「見て面白い」「成功・失敗が一目で分かる」4課題で比較する静的ベンチマークです。
+LLMの4課題を、モデルごとに1ページで比較するベンチマーク。実行記録は追記で保存し、GitHub Pagesで閲覧できます。
 
-- 8つのご当地知識を閉本で正誤判定し、Fact Cardを渡した後に訂正する日本語チャット
-- 空盤面から配置を計画し、18連鎖して全消しする丸い色ぷよの落ちものゲーム
-- 標準6色の3×3ルービックキューブ
-- 順運動学・逆運動学・障害物回避・把持を行う2リンクロボットアーム仕分け
+- **日本語**：「ギャルっぽく糸島を紹介して」への返答を全文表示。自然さ・ギャル口調・事実性は人が別々に評価。
+- **18連鎖**：空盤面から35組を積み、最後の1組で18連鎖・72個全消し。モデルの計画・配置・消去ロジックを独立検証。
+- **3Dキューブ**：毎回25手のスクランブルを生成。解く側には状態だけを渡し、各手の論理と回転アニメーションも検証。ドラッグで六面を確認できます。
+- **ロボットアーム**：重力・接触・摩擦が働く3関節アームを制御。中→小→大に積み、指を離して3秒安定させます。
 
-単一の総合点は作りません。課題達成、ロジック、未知入力への頑健性、見やすさ、token・費用・時間・サブエージェント使用量を別々に公開します。
+外観・操作・物理環境は共通、解法と制御はモデルの提出コードです。総合点は作らず、達成項目、失敗理由、token、時間、取得できた費用を表示します。参考実装をモデルの出力として掲載しません。
 
-## 現在含まれるもの
+## セットアップ
 
-- `prompts/` — 全モデルへ渡すversion固定prompt
-- `starters/` — Coding Agent workspaceへ置く公開テスト
-- `evaluator/` — Node標準ライブラリだけの独立oracle
-- `runs/` — append-onlyの実行記録
-- `web/` — 結果サイトの静的source
-- `scripts/build-site.mjs` — run検証と`dist/`生成
+Node.js 24以上。
 
-候補のHTML/CSS/JavaScriptは評価とは分離した観察用showcaseとして公開できます。モデル専用ページでは同じcohortの4課題を2×2で並べ、3つのlive showcaseを`sandbox="allow-scripts"`のopaque-origin iframeへ描画します。外側の課題ボタンで動かせるのは1件ずつです。主判定は候補画面ではなくtop-level run status、副評価は独立評価器のJSONだけを正とします。
-
-## 必要環境
-
-- Node.js 24以上
-- 追加packageなし
-
-```powershell
-npm test
-npm run build
-npm run prompt -- prism-twist
-```
-
-生成された`dist/`を任意の静的serverで開けます。トップはモデル一覧で、各モデルの専用ページに4課題を固定順で掲載します。
-
-```powershell
+```sh
+npm ci
+npm run check
 npm run dev
 ```
 
-`http://127.0.0.1:4173/`で確認できます。build、test、local serverのいずれもnetworkやinstallを必要としません。
+ローカル表示は `http://127.0.0.1:4173/`。公開先は [GitHub Pages](https://naoyamd.github.io/lightbenchmark/)。
 
-## ベンチマーク実行
+## モデルを比較する
 
-1. `npm run prompt -- <task-id>`でroleとturnを含む完成payloadを取り出し、`npm run hash:prompts`で実際のmessage sequenceのSHA-256を記録する。
-2. `npm run prepare -- work/<fresh-run-id>`でfresh bundleを作り、prompt・evaluator・cohort固有fixtureのhashを実行前に封印する。対象task directoryだけをbenchmark repositoryやoracleが存在しない使い捨てVM/containerへ転送する。
-3. その隔離環境でnetworkなし、12分hard timeout、24 agent step、出力20,000 token、0.25 USD上限としてCoding Agentを1回実行する。runnerが強制できない上限は`observed-only`と記録し、hard制限として扱わない。
-4. 候補artifactを公開テスト、権限制限した別processの非公開oracle、fresh Chromiumのbrowser smokeへ通す。fixtureは候補workspaceへ置かず、cohortの4実行が閉じるまで公開しない。
-5. `docs/RUN_SPEC.md`に従って`runs/<run-id>/run.json`と任意のshowcaseを追加する。`runs/_example`のような`_`始まりの補助ディレクトリは公開ビルドから除外される。
-6. `npm run check`後、`main`へ反映するとGitHub Pagesが更新される。
+全モデルで共通の条件ファイルを作り、表示されたパスを各実行へ渡します。1モデルにつき4回の新規会話、コード課題は同じ3条件で検証します。
 
-チャット課題は検索・groundingなしのfresh conversationで2ターン実行します。検索を無効化できないproviderは閉本結果と別cohortにしてください。
-
-ローカルdebugではチャットも実装課題もCodexログイン認証を一時`CODEX_HOME`へ隔離して使います。チャットはread-onlyの空workspaceで同一sessionをresumeし、JSONLにtool callが1件でも出たら失敗にします。CLIではsystem/user roleがResponses APIと完全同値ではないため、これは`same-host-debug`であり正式結果には使えません。実装課題はprompt・公開テスト・空の提出先だけをrepo外の使い捨てdirectoryへ移し、JSONLと12分timeoutを保存します。
-
-```powershell
-npm run run:chat -- work/<run-id>/japanese-chat --model gpt-5.6-luna --effort max
-npm run run:codex -- work/<run-id>/prism-twist --model gpt-5.6-luna --effort max
-npm run run:codex -- work/<run-id>/robot-arm-sort --model gpt-5.6-luna --effort max
-npm run smoke -- prism-twist work/<run-id>/prism-twist/submission/site
-npm run finalize:debug -- work/<run-id>/prism-twist --run-id debug-<attempt>-prism-twist --cohort-id debug-<attempt>
+```sh
+npm run benchmark:cohort
+npm run benchmark:run -- --model deepseek-v4-flash --cohort results/cohorts/<id>.json
+npm run benchmark:run -- --model mimo-v2.5 --cohort results/cohorts/<id>.json
+npm run check
 ```
 
-Codex runnerはJSONLを実行中から逐次保存し、中断しても開始時刻と観測済み件数を残します。debug finalizerは既存runを上書きせず、封印済みhashを再照合して候補、fixture、browser smoke、評価、usageをappend-only recordへ確定します。評価器・評価harness・非公開testの参照痕跡は比較不能理由として記録します。
+OpenCode Goは `OPENCODE_GO_API_KEY`、またはOpenCode CLIに保存済みのGo認証を使います。キーはご自身の端末で設定し、リポジトリへ保存しないでください。Goの公式APIに直接接続するため、個人のOpenCode設定・AGENTS.md・ツール・参考解法をモデルへ渡しません。Goの利用枠・追加料金はアカウント設定に従います。自動リトライや自動チャージは行いません。
 
-Coding課題の候補moduleは、必ずnetworkを切った使い捨て環境で評価します。CLIはfixtureとoracleを持つ信頼済み親processから、候補をNode permission model付きの別processで呼び出します。候補processが読めるのは提出directoryと公開RPC workerだけです。環境変数は外側のnetwork隔離を運用者が確認したことを示す誤実行防止gateです。
+任意の互換APIには `LIGHTBENCH_API_KEY` と `LIGHTBENCH_BASE_URL` を設定します。
 
-```powershell
-$env:LIGHTBENCH_ISOLATED = "1"
-npm run evaluate -- prism-twist C:\isolated\submission\site C:\sealed\fixture.json
+```sh
+npm run benchmark:run -- --provider compatible --model your-model-id --cohort results/cohorts/<id>.json
 ```
 
-第3引数を省くと公開qualification caseだけを使います。blind比較ではcohortごとの未公開fixtureを第3引数へ渡し、出力JSONを`run.json`の`evaluation`へ保存してください。
+`--protocol chat|messages|responses` でAPI形式を選択できます。Goの代表的なモデルは自動選択します。モデルIDは `opencode models opencode-go --refresh` で確認してください。未対応の場合は失敗理由を記録し、別モデルへ勝手に置き換えません。
 
-## 公開方針
+## 保存と日本語の評価
 
-- 1モデル1回を基本とし、`n=1 showcase`と表示します。
-- 後から修正した成果は同じrunを上書きせず、新しいattemptにします。
-- providerが返さないtokenや費用は推測せず`null`で記録します。
-- rootとsubagentのusageを分け、合計時に二重計上しません。
-- 人手修正や再指示は`assisted`として別表示します。
-- 新しいモデルを公開後に追加する場合は、新しいhidden fixtureを持つ別cohortにします。
-- モデルページは各課題の最新runを使い、cohortが混在する場合はカードごとに採用cohortを明示します。
-- ハーネス調整中のrunは`runKind: debug`かつ`status: inconclusive`とし、正式結果へ混ぜません。
-- live showcaseはUTF-8のHTML/CSS/JavaScript/JSON、合計2 MiB以下に限定し、CSP、path traversal、symlink、外部通信、worker、入れ子frameを拒否します。
-- live showcaseは初期状態を同時に表示できますが、実行は1件だけです。別課題の実行時は前の課題を初期状態へ戻します。デモのmessageや成功演出はscoreへ反映しません。
+`results/runs/<実行ID>/` に要求本文、返答原文、提出コード、usage、各条件の判定と再生ログを保存します。既存記録は上書きせず、取得できない費用やtokenは `null`。生成時間と評価器の実行時間は別々に記録します。
 
-## 権利・安全
+日本語カードの「日本語を評価」で評価JSONを保存し、取り込めます。
 
-課題として認識できる定番の盤面・配色・操作は必須ですが、公式logo、既存ゲームの画像・音声・固有キャラクターは使いません。
+```sh
+node platform/reviews.mjs path/to/review.json
+npm run build
+```
 
-## License
+自然さ・ギャル口調・事実性を各1〜5で評価し、理由を必ず残します。未評価を0点にはしません。
 
-MIT
+ブラウザの「初期化」は提出コードを新しいseedで実行します。保存済み成績へは上書きしません。モデルを切り替えても再実行seedを保ち、同じ条件で動かします。
+
+## 評価と隔離
+
+候補コードはQuickJS/WASMの独立した環境で動かし、ホストのファイル、ネットワーク、DOM、モジュール読込を公開しません。メモリ64MiB、関数呼出し3秒、外側のworkerに60秒の上限があります。ブラウザも同じ評価器を使用します。
+
+キューブのソルバーは新しい実行環境で状態だけを受け取り、生成履歴を受け取りません。独立生成した未知の盤面も試します。面回転は候補の軸・層・途中角度を共通描画へ接続します。アームは速度指令と指の開き幅だけを受け取り、箱の位置や成功判定を変更できません。
+
+APIリクエスト上限4分と18,000出力tokenを指定し、終了理由とusageを保存します。料金自体をハーネスから強制停止する機能はないため、利用枠・請求上限はプロバイダー側で設定してください。
+
+仕様・プロンプトは [platform/prompts.mjs](platform/prompts.mjs)、設計は [docs/PLATFORM_V2.md](docs/PLATFORM_V2.md)。`platform/reference/` は評価器の動作確認用で、モデルへの要求本文には含めません。
+
+## 公開
+
+```sh
+npm run check
+git add platform results package.json package-lock.json README.md docs .github scripts
+git commit -m "Add benchmark results"
+git push origin main
+```
+
+Pages workflowが検査・ビルド・公開を行います。APIキーはGitHub Actionsへ渡しません。APIを呼ぶのはローカルの実行CLIだけです。
+
+旧実測は `/archive/` から閲覧できます。旧仕様の `prompts/`・`starters/`・`runs/` と新仕様は互換ではなく、成績を混ぜません。[旧手順](docs/LEGACY.md)も保存しています。
+
+## ライセンス
+
+MIT。Planck.jsとQuickJSのライセンスも配布物に同梱します。既存ゲームの画像・音声・ロゴは使用していません。

@@ -801,7 +801,7 @@ export async function buildSite(options = {}) {
   const existingDist = await lstat(distDir).catch(() => null);
   if (existingDist?.isSymbolicLink()) fail(distDir, 'dist directory must not be a symlink');
 
-  await rm(distDir, { recursive: true, force: true });
+  await rm(distDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   await copyDirectory(webDir, distDir);
   await copyPrompts(promptsDir, path.join(distDir, 'prompts'));
   await copyRunArtifacts(runEntries, distDir);

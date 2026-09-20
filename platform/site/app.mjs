@@ -1,0 +1,100 @@
+import {createStackScene,stackPhase} from './arm-stack-view.mjs';
+import {createCubeView} from './cube-view.mjs';
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const taskOrder=['chat','puyo','cube','arm'];
+const tasks={chat:{name:'日本語チャット',subtitle:'ギャル口調の紹介文をそのまま全文表示'},puyo:{name:'18連鎖・全消し',subtitle:'配置から連鎖まで、消去と落下を分けて再生'},cube:{name:'3Dキューブ',subtitle:'ドラッグで全体を回転・各手の面回転を再生'},arm:{name:'ロボットアーム',subtitle:'下から中 → 小 → 大。手を離して3秒安定させる'}};
+const statusText={pass:'合格',partial:'一部達成','candidate-fail':'未達成','infra-error':'実行エラー',unrated:'人の評価待ち'};
+const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(n,d=2)=>Number.isFinite(n)?n.toFixed(d):'—';
+const PUYO_TIMING={place:240,highlight:380,erase:150,fall:300,settle:170};
+let manifest,run,selectedModel,activeTask=null,puyoSpeed=1,cubeView=null,stackScene=null;
+let demos={},steps={},seeds={},exerciseSeeds={},localResults={},trialIndices={},workers=new Map(),loadSerial=0,playSerial=0,waitTimer=null,finishWait=null,puyoAnimations=[];
+function freshSeed(old){let s;do{s=crypto.getRandomValues(new Uint32Array(1))[0];}while(s===old);return s;}
+function selectedRecord(id){return localResults[id]??run.tasks[id].trials[trialIndices[id]??0];}
+function boardMarkup(board){return `<div class="board" aria-hidden="true">${board.toReversed().map((row,ry)=>row.map((c,x)=>`<i class="cell" data-color="${c}" data-x="${x}" data-y="${13-ry}"></i>`).join('')).join('')}</div>`;}
+function puyoFalls(board,cleared){const removed=new Set(cleared.map(([x,y])=>`${x},${y}`)),moves=[];for(let x=0;x<6;x++){let toY=0;for(let y=0;y<14;y++)if(board[y][x]&&!removed.has(`${x},${y}`))moves.push({x,fromY:y,toY:toY++,color:board[y][x]});}return moves;}
+function phaseText(id){const f=demos[id]?.frames[steps[id]];if(!f)return '再生データなし';if(id==='puyo')return f.phase==='chain'?`${f.chain}連鎖 / 残り${f.board.flat().filter(Boolean).length}個`:`配置 ${Math.min(steps[id],36)}/36組`;if(id==='cube')return `${f.phase==='scramble'?'スクランブル':'解答'} ${f.index}手`;return f.phase==='CONTROL'?`${f.stackCount}/3段：フィードバック制御中`:stackPhase(f);}
+function sceneFor(id){
+ const d=demos[id];if(!d?.frames?.length)return '<div class="empty-scene">再生できる結果がありません</div>';
+ const f=d.frames[steps[id]];
+ const scene=id==='puyo'?boardMarkup(f.board)+`<div class="chain-counter"><strong>${String(f.chain).padStart(2,'0')}</strong><span>/ 18 連鎖</span></div>`:id==='cube'?'<div id="cube-host" class="cube-host"></div><span class="cube-count" id="cube-move-label"></span>':`<div class="stack-goal"><span>下から</span><b class="size-chip medium"><i></i>① 中</b><span>→</span><b class="size-chip small"><i></i>② 小</b><span>→</span><b class="size-chip large"><i></i>③ 大</b></div>${stackScene(steps[id])}`;
+ return `<div class="scene" role="group" aria-label="${tasks[id].name}のリプレイ"><div class="scene-top"><span>${localResults[id]?'このブラウザで再実行':'保存済みの実測'}</span><strong>seed ${d.seed??d.params?.seed}</strong></div>${scene}${id==='arm'?'':`<div class="scene-bottom">${phaseText(id)}</div>`}</div>`;
+}
+function resultMarkup(id){
+ const record=selectedRecord(id),d=demos[id];
+ let html=`<div class="result-label">${localResults[id]?'再実行の結果':'保存した3条件の結果'}</div><h3 class="result-value">${escapeHtml(statusText[localResults[id]?.status??run.tasks[id].status])}</h3>`;
+ if(localResults[id]?.checks)html+=`<ul class="checks">${record.checks.map(c=>`<li class="${c.passed?'ok':'fail'}">${c.passed?'✓':'×'} ${escapeHtml(c.name)}</li>`).join('')}</ul>`;
+ else {const trials=run.tasks[id].trials,names=[...new Set(trials.flatMap(t=>(t.checks??[]).map(c=>c.name)))];html+=`<ul class="checks">${names.map(name=>{const passed=trials.filter(t=>t.checks?.some(c=>c.name===name&&c.passed)).length;return `<li class="${passed===trials.length?'ok':'fail'}">${passed}/${trials.length} ${escapeHtml(name)}</li>`;}).join('')}</ul>`;}
+ if(run.tasks[id].trials.length>1)html+=`<label class="trial-picker">保存した再生 <select data-trial="${id}" aria-label="${tasks[id].name}の保存条件"><option value=""${localResults[id]?' selected':''} disabled>選択</option>${run.tasks[id].trials.map((t,i)=>`<option value="${i}"${!localResults[id]&&(trialIndices[id]??0)===i?' selected':''}>条件${i+1}・${escapeHtml(statusText[t.status])}・seed ${t.seed}</option>`).join('')}</select></label>`;
+ if(id==='arm'&&d){const f=d.frames[steps[id]];html+=`<div class="stack-score-strip"><div><span>積み上げ</span><strong>${f.stackCount}<small>/3</small></strong></div><div><span>手を離して安定</span><strong>${fmt(f.stableSeconds)}<small>/3秒</small></strong></div><div><span>経過</span><strong>${fmt(f.t)}<small>秒</small></strong></div></div>`;}
+ if(id==='puyo'&&d)html+=`<div class="puyo-options"><label>連鎖速度 <select id="puyo-speed" aria-label="ぷよの連鎖速度"><option value="1">標準：約1秒</option><option value="1.5"${puyoSpeed===1.5?' selected':''}>ゆっくり：約1.5秒</option></select></label>${d.frames.length>36?'<button id="chain-start">連鎖から再生</button>':''}</div>`;
+ if(id==='cube'&&d)html+=`<p class="sequence">${escapeHtml(d.scramble.join(' '))}</p><p class="result-note">ドラッグ・矢印キーで裏側や底面も確認できます。</p>`;
+ if(run.tasks[id].error)html+=`<p class="error-note">${escapeHtml(run.tasks[id].error)}</p>`;
+ return html;
+}
+function renderChat(){const record=run.tasks.chat;return `<article class="task-card chat-card" data-task="chat"><header class="task-header"><div class="task-heading"><span class="task-number">01</span><div><h2>日本語チャット</h2><small>${tasks.chat.subtitle}</small></div></div><span class="status">${statusText[record.status]}</span></header><div class="card-body"><p class="chat-caption">「ギャルっぽく糸島を紹介して」</p><div class="chat-answer">${escapeHtml(record.response?.text??record.error??'回答なし')}</div><div class="chat-summary">${record.characterCount??0}文字・原文を全文表示。自然さと事実性は別々に評価します。</div></div><footer class="task-controls"><button data-review>日本語を評価</button><span>${run.humanReviews?.length??0}件の評価</span><button class="detail-button" data-detail="chat">詳細 ↗</button></footer></article>`;}
+function prepareReplay(){demos={};steps={};stackScene=null;for(const id of taskOrder.slice(1)){const result=selectedRecord(id);demos[id]=result?.replay??null;steps[id]=id==='cube'?Math.min(demos[id]?.scramble?.length??0,(demos[id]?.frames.length??1)-1):0;}if(demos.arm)stackScene=createStackScene(demos.arm);}
+function render(){
+ cubeView?.destroy();cubeView=null;
+ $('#model-name').textContent=run.model;document.title=`${run.model} — LightBenchmark`;$('#model-icon').textContent=run.model[0].toUpperCase();$('#model-meta').textContent=`${run.provider} / ${new Date(run.startedAt).toLocaleString('ja-JP')} / ${run.policy}`;
+ const responses=Object.values(run.tasks).map(t=>t.response),sum=key=>responses.every(r=>Number.isFinite(r?.usage?.[key]))?responses.reduce((s,r)=>s+r.usage[key],0):null;
+ $('#model-metrics').innerHTML=`<div><dt>課題</dt><dd>4</dd></div><div><dt>合計token</dt><dd><small>${sum('totalTokens')?.toLocaleString()??'未取得'}</small></dd></div><div><dt>申告費用</dt><dd><small>${sum('costUsd')===null?'未取得':'$'+fmt(sum('costUsd'),4)}</small></dd></div>`;
+ $('#condition-label').textContent=`条件 ${run.conditionHash.slice(0,12)} / ${Object.keys(localResults).length?'ブラウザで再実行中の条件':'保存した実行結果'}。総合点には合算しません。`;
+ $('#task-grid').innerHTML=renderChat()+taskOrder.slice(1).map((id,i)=>{const d=demos[id],busy=workers.has(id);return `<article class="task-card" data-task="${id}"><header class="task-header"><div class="task-heading"><span class="task-number">0${i+2}</span><div><h2>${tasks[id].name}</h2><small>${tasks[id].subtitle}</small></div></div><span class="status ${run.tasks[id].status==='pass'?'':'warn'}">${statusText[run.tasks[id].status]}</span></header><div class="card-body"><div class="visual-area" data-scene="${id}">${sceneFor(id)}</div><div class="result-area">${resultMarkup(id)}</div></div><footer class="task-controls"><button class="reset-button" data-reset="${id}" aria-label="${tasks[id].name}を初期化" ${busy||!run.tasks[id].source?'disabled':''}>${busy?'計算中…':'↻ 初期化'}</button><button class="play-button" data-play="${id}" aria-label="${tasks[id].name}を再生" aria-pressed="false" ${!d?.frames.length||busy?'disabled':''}>▶ 再生</button><input class="replay-range" type="range" min="0" max="${(d?.frames.length??1)-1}" value="${steps[id]}" data-range="${id}" aria-label="${tasks[id].name}の再生位置" ${!d?'disabled':''}><span class="replay-step" data-step="${id}">${steps[id]}/${(d?.frames.length??1)-1}</span><button class="detail-button" data-detail="${id}">詳細 ↗</button></footer></article>`;}).join('');
+ if(demos.cube?.frames.length){cubeView=createCubeView($('#cube-host'),demos.cube.frames[steps.cube].state,{label:'キューブの視点操作。ドラッグまたは矢印キーで回転',resetLabel:'視点リセット'});updateScene('cube');}
+}
+function updateScene(id){
+ if(!demos[id])return;
+ if(id==='cube'){cubeView?.setState(demos.cube.frames[steps.cube].state);$('[data-task="cube"] .scene-bottom').textContent=phaseText(id);$('#cube-move-label').textContent=demos.cube.frames[steps.cube].move??'開始';}
+ else $(`[data-scene="${id}"]`).innerHTML=sceneFor(id);
+ $(`[data-range="${id}"]`).value=steps[id];$(`[data-step="${id}"]`).textContent=`${steps[id]}/${demos[id].frames.length-1}`;
+ if(id==='arm')$('[data-task="arm"] .result-area').innerHTML=resultMarkup('arm');
+ $('#live-status').textContent=tasks[id].name+'、'+phaseText(id);
+}
+function stopReplay(){const previous=activeTask;playSerial++;activeTask=null;clearTimeout(waitTimer);waitTimer=null;const resolve=finishWait;finishWait=null;resolve?.();for(const a of puyoAnimations)a.cancel();puyoAnimations=[];cubeView?.cancel();$$('[data-play]').forEach(b=>{b.textContent='▶ 再生';b.setAttribute('aria-pressed','false');});if(previous&&demos[previous]&&$(`[data-scene="${previous}"]`))updateScene(previous);}
+function pause(ms){return new Promise(resolve=>{finishWait=resolve;waitTimer=setTimeout(()=>{waitTimer=null;finishWait=null;resolve();},ms);});}
+async function animateNodes(nodes,keyframes,duration){const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;const animations=nodes.map((el,index)=>el.animate(typeof keyframes==='function'?keyframes(el,index):keyframes,{duration:reduced?0:duration,easing:'ease-in-out',fill:'forwards'}));puyoAnimations.push(...animations);await Promise.allSettled(animations.map(a=>a.finished));}
+async function animatePuyo(next,token){
+ const board=$('[data-task="puyo"] .board'),before=demos.puyo.frames[steps.puyo].board,cell=(x,y)=>board.querySelector(`[data-x="${x}"][data-y="${y}"]`),pitch=cell(0,0).getBoundingClientRect().top-cell(0,1).getBoundingClientRect().top;
+ if(next.phase!=='chain'){board.outerHTML=boardMarkup(next.board);const placed=[];for(let y=0;y<14;y++)for(let x=0;x<6;x++)if(next.board[y][x]&&!before[y][x])placed.push($(`[data-task="puyo"] .cell[data-x="${x}"][data-y="${y}"]`));await animateNodes(placed,el=>[{transform:`translateY(-${(14-Number(el.dataset.y))*pitch}px)`},{transform:'translateY(0)'}],PUYO_TIMING.place);return;}
+ const clears=next.cleared.map(([x,y])=>cell(x,y));$('[data-task="puyo"] .chain-counter strong').textContent=String(next.chain).padStart(2,'0');
+ await animateNodes(clears,[{filter:'brightness(1)'},{filter:'brightness(2)',transform:'scale(1.2)'}],PUYO_TIMING.highlight*puyoSpeed);if(token!==playSerial)return;
+ await animateNodes(clears,[{opacity:1},{opacity:0,transform:'scale(.15)'}],PUYO_TIMING.erase*puyoSpeed);if(token!==playSerial)return;
+ const falls=puyoFalls(before,next.cleared).filter(m=>m.fromY!==m.toY);await animateNodes(falls.map(m=>cell(m.x,m.fromY)),(el,i)=>[{transform:'translateY(0)'},{transform:`translateY(${(falls[i].fromY-falls[i].toY)*pitch}px)`}],PUYO_TIMING.fall*puyoSpeed);if(!falls.length)await pause(PUYO_TIMING.fall*puyoSpeed);
+}
+async function playTask(id){
+ const wasActive=activeTask===id;stopReplay();if(wasActive||!demos[id])return;
+ if(steps[id]===demos[id].frames.length-1){steps[id]=0;updateScene(id);}
+ const token=playSerial;activeTask=id;const button=$(`[data-play="${id}"]`);button.textContent='Ⅱ 停止';button.setAttribute('aria-pressed','true');
+ try{while(token===playSerial&&steps[id]<demos[id].frames.length-1){const next=demos[id].frames[steps[id]+1];
+  if(id==='cube'){const animation=demos.cube.animations?.[next.move];if(!animation)throw new Error('この手のアニメーションを候補が返していません');await cubeView.turn(next.move,next.state,{duration:next.move.endsWith('2')?700:520,animation});}
+  else if(id==='puyo')await animatePuyo(next,token);else await pause(50);
+  if(token!==playSerial)return;steps[id]++;updateScene(id);puyoAnimations=[];if(id==='puyo'&&next.phase==='chain')await pause(PUYO_TIMING.settle*puyoSpeed);if(id==='cube')await pause(90);
+ }if(token===playSerial)stopReplay();}catch(error){stopReplay();openDialog('再生を停止しました',`<p>${escapeHtml(error.message)}</p>`);}
+}
+function openDialog(title,body){stopReplay();$('#dialog-content').innerHTML=`<h2 id="dialog-title">${escapeHtml(title)}</h2>${body}`;$('#detail-dialog').showModal();}
+function detail(id){const record=run.tasks[id];openDialog(tasks[id].name,`<p>保存した成績：${escapeHtml(statusText[record.status])}。初期化後の試行は成績へ上書きしません。</p><pre class="modal-code">${escapeHtml(JSON.stringify({prompt:record.prompt,usage:record.response?.usage,durationMs:record.response?.durationMs,finishReason:record.response?.finishReason,trials:record.trials.map(t=>({...t,replay:undefined})),humanReviews:id==='chat'?run.humanReviews:undefined},null,2))}</pre>${record.source?`<details><summary>提出コード</summary><pre class="modal-code">${escapeHtml(record.source)}</pre></details>`:''}`);}
+async function resetTask(id,chosenSeed){
+ if(!run.tasks[id].source||workers.has(id))return;stopReplay();const serial=loadSerial;
+ seeds[id]=chosenSeed??freshSeed(seeds[id]);exerciseSeeds[id]=seeds[id];const worker=new Worker(new URL('./assets/browser-worker.mjs',import.meta.url),{type:'module'});
+ const result=await new Promise(resolve=>{let settled=false;const timeout=setTimeout(()=>finish({status:'candidate-fail',passed:0,total:1,checks:[{name:'実行時間上限',passed:false}],replay:null}),60000);function finish(value){if(settled)return;settled=true;clearTimeout(timeout);worker.terminate();resolve(value);}workers.set(id,{worker,cancel:()=>finish(null)});render();worker.onmessage=e=>finish(e.data);worker.onerror=()=>finish({status:'infra-error',error:'ブラウザでの実行に失敗しました',replay:null});worker.postMessage({task:id,source:run.tasks[id].source,seed:seeds[id]});});
+ if(workers.get(id)?.worker===worker)workers.delete(id);if(serial!==loadSerial||!result)return;localResults[id]=result;prepareReplay();render();$('#live-status').textContent=`${tasks[id].name}の初期化が完了しました`;
+}
+async function loadRun(id){
+ const serial=++loadSerial;stopReplay();for(const job of workers.values())job.cancel();workers.clear();localResults={};trialIndices={};
+ const entry=manifest.runs.find(r=>r.id===id);const response=await fetch(entry.path);if(!response.ok)throw new Error('実行記録を読み込めません');const data=await response.json();if(serial!==loadSerial)return;run=data;selectedModel=data.model;
+ const modelRuns=manifest.runs.filter(r=>r.model===selectedModel);$('#run-select').innerHTML=modelRuns.map(r=>`<option value="${escapeHtml(r.id)}"${r.id===id?' selected':''}>${escapeHtml(new Date(r.startedAt).toLocaleString('ja-JP'))} / ${r.conditionHash.slice(0,8)}</option>`).join('');
+ $('#model-nav').innerHTML='<span>モデル</span>'+[...new Set(manifest.runs.map(r=>r.model))].map(m=>`<a class="model-link" href="#${encodeURIComponent(m)}" ${m===selectedModel?'aria-current="page"':''}>${escapeHtml(m)}</a>`).join('');
+ for(const task of taskOrder.slice(1))seeds[task]=run.tasks[task].trials[0]?.seed;prepareReplay();render();for(const [task,seed]of Object.entries(exerciseSeeds))void resetTask(task,seed);
+}
+function review(){openDialog('日本語の評価',`<p>原文を読んで評価してください。JSONを保存し、CLIで取り込むと実行記録に追加できます。</p><form id="review-form"><label>評価者名 <input name="reviewer" required maxlength="80"></label>${[['naturalness','自然な日本語'],['gyaru','ギャル口調'],['factuality','事実の正確さ']].map(([name,label])=>`<label>${label} <select name="${name}" required><option value="">選択</option>${[1,2,3,4,5].map(v=>`<option>${v}</option>`).join('')}</select></label>`).join('')}<label>理由・確認した出典 <textarea name="notes" required maxlength="3000"></textarea></label><button type="submit">評価JSONを保存</button></form>`);$('#review-form').addEventListener('submit',e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));for(const k of ['naturalness','gyaru','factuality'])data[k]=Number(data[k]);const blob=new Blob([JSON.stringify({runId:run.id,...data},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`review-${run.id}.json`;a.click();URL.revokeObjectURL(url);});}
+$('#task-grid').addEventListener('click',e=>{const reset=e.target.closest('[data-reset]'),play=e.target.closest('[data-play]'),d=e.target.closest('[data-detail]');if(reset)void resetTask(reset.dataset.reset);else if(play)void playTask(play.dataset.play);else if(d)detail(d.dataset.detail);else if(e.target.closest('[data-review]'))review();else if(e.target.closest('#chain-start')){stopReplay();steps.puyo=36;updateScene('puyo');void playTask('puyo');}});
+$('#task-grid').addEventListener('input',e=>{const id=e.target.dataset.range;if(id){stopReplay();steps[id]=Number(e.target.value);updateScene(id);}});
+$('#task-grid').addEventListener('change',e=>{if(e.target.id==='puyo-speed'){stopReplay();puyoSpeed=Number(e.target.value);}const id=e.target.dataset.trial;if(id){stopReplay();delete localResults[id];delete exerciseSeeds[id];trialIndices[id]=Number(e.target.value);prepareReplay();render();}});
+$('#reset-all').addEventListener('click',()=>{for(const id of taskOrder.slice(1))void resetTask(id);});
+$('#run-select').addEventListener('change',e=>void loadRun(e.target.value));
+$('#visual-button').addEventListener('click',()=>openDialog('共通部分とモデルの実装範囲','<p>表示枠、配色、物体の形、操作ボタン、カメラは共通です。モデルは文章、ぷよの計画とゲームロジック、キューブの解法・状態更新・面回転、アームの制御器を提出します。</p><p>アームの物理と成功判定は共通環境です。参考解法はモデルへ渡しません。</p>'));
+$('#conditions-button').addEventListener('click',()=>openDialog('実行条件',`<p>各課題は新規会話で1回答。外部ツール・個人の設定・参考解答は渡しません。同じ条件hashの実行同士を比較してください。</p><p>モデルの文章は原文のまま表示し、費用やtokenが返らない場合は未取得とします。日本語は人の評価待ちです。</p><pre class="modal-code">${escapeHtml(JSON.stringify({version:run.version,cohortId:run.cohortId,conditionHash:run.conditionHash,policy:run.policy},null,2))}</pre>`));
+$('#close-dialog').addEventListener('click',()=>$('#detail-dialog').close());document.addEventListener('visibilitychange',()=>{if(document.hidden)stopReplay();});
+window.addEventListener('hashchange',()=>{const model=decodeURIComponent(location.hash.slice(1));const entry=manifest.runs.find(r=>r.model===model);if(entry)void loadRun(entry.id);});
+try{const response=await fetch('data/runs.json');if(!response.ok)throw new Error('成績一覧を読み込めません');manifest=await response.json();const chosen=manifest.runs.find(r=>r.model===decodeURIComponent(location.hash.slice(1)))??manifest.runs[0];if(chosen)await loadRun(chosen.id);else{$('#model-name').textContent='実行結果はまだありません';$('#task-grid').innerHTML='<p>モデル実行後に4課題の結果がここに並びます。</p>';$('#reset-all').disabled=true;}}catch(error){$('#model-name').textContent='読み込みエラー';$('#task-grid').textContent=error.message;}

@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "node scripts/build-site.mjs",
+    "build": "node platform/build.mjs",
     "dev": "node scripts/serve.mjs",
     "evaluate": "node scripts/evaluate-submission.mjs",
     "finalize:debug": "node scripts/finalize-debug-run.mjs",
@@ -17,7 +17,15 @@
     "run:chat": "node scripts/run-chat-openai.mjs",
     "run:codex": "node scripts/run-codex-task.mjs",
     "smoke": "node scripts/showcase-smoke.mjs",
-    "test": "node --test --test-isolation=none",
-    "check": "node --test --test-isolation=none && node scripts/build-site.mjs"
+    "test": "node --test --test-isolation=none tests/*.test.mjs platform/*.test.mjs",
+    "benchmark:cohort": "node platform/run.mjs cohort",
+    "benchmark:run": "node platform/run.mjs run",
+    "check": "npm test && node platform/build.mjs"
+  },
+  "dependencies": {
+    "quickjs-emscripten": "0.32.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
   }
 }
