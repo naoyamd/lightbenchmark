@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>LightBenchmark — モデル別の4課題</title><link rel="stylesheet" href="styles.css"><link rel="icon" href="data:,"></head>
+<body>
+<header class="topbar"><a class="brand" href="./"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>LightBenchmark</a><div class="topbar-right"><button id="visual-button">共通スターター</button><a href="archive/">旧ベンチマーク</a><a href="https://github.com/naoyamd/lightbenchmark">GitHub</a></div></header>
+<main>
+<nav class="model-nav" aria-label="モデル選択" id="model-nav"></nav>
+<section class="model-overview" aria-label="モデル概要"><div class="identity"><span id="model-icon" class="model-icon" aria-hidden="true">L</span><div><h1 id="model-name">読み込み中</h1><p>日本語・18連鎖・キューブ・ロボットアームの4課題</p><div class="subline" id="model-meta"></div></div></div><dl class="overview-metrics" id="model-metrics"></dl></section>
+<div class="controls-row"><div><label>実行記録 <select id="run-select" aria-label="実行記録"></select></label> <button id="reset-all" class="small-button">↻ 全課題を初期化</button></div><p class="page-condition" id="condition-label"></p></div>
+<section id="empty-state" class="empty-state" hidden><h2>動作デモと結果の追加</h2><p>デモでは、参考実装で4課題の表示と操作を確認できます。モデルの実測結果には含めません。</p><div class="empty-state-links"><a class="small-button" href="./demo/">動作デモ</a><a class="small-button" href="https://github.com/naoyamd/lightbenchmark/blob/main/docs/EXTERNAL_RESULTS.md">結果を追加する手順 ↗</a></div></section>
+<div id="task-grid" class="task-grid" aria-label="選択したモデルの4課題"></div>
+<footer class="page-foot"><span id="footer-note">初期化は提出コードを新しい条件で実行します。保存済みの成績は変わりません。</span><div class="links"><button id="conditions-button">実行条件</button><a href="data/runs.json">成績データ</a></div></footer>
+<p id="live-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+</main>
+<dialog id="detail-dialog" aria-labelledby="dialog-title"><div class="dialog-top"><span>LightBenchmark</span><button id="close-dialog" class="close" aria-label="閉じる">×</button></div><div id="dialog-content"></div></dialog>
+<script type="module" src="app.mjs"></script></body></html>

@@ -3,6 +3,7 @@ name: Verify and deploy LightBenchmark
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -24,6 +25,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: npm
+      - run: npm ci
       - name: Verify evaluator and sandboxed showcase site
         run: npm run check
       - uses: actions/configure-pages@v6
@@ -32,6 +35,7 @@ jobs:
           path: dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -47,5 +51,8 @@ jobs:
           root="${{ steps.deployment.outputs.page_url }}"
           root="${root%/}/"
           curl --fail --location --retry 10 --retry-delay 3 "${root}"
-          curl --fail --location --retry 10 --retry-delay 3 "${root}models/gpt-5.6-luna/"
+          curl --fail --location --retry 10 --retry-delay 3 "${root}archive/models/gpt-5.6-luna/"
           curl --fail --location --retry 10 --retry-delay 3 "${root}data/runs.json"
+          curl --fail --location --retry 10 --retry-delay 3 --output /dev/null "${root}demo/"
+          curl --fail --location --retry 10 --retry-delay 3 --output /dev/null "${root}vendor/planck.mjs"
+          curl --fail --location --retry 10 --retry-delay 3 --output /dev/null "${root}assets/emscripten-module.wasm"
