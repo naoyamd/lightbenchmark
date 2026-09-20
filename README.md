@@ -21,7 +21,21 @@ npm run dev
 
 ローカル表示は `http://127.0.0.1:4173/`。公開先は [GitHub Pages](https://naoyamd.github.io/lightbenchmark/)。
 
-## モデルを比較する
+実測データがない間も4課題の入口と[動作デモ](https://naoyamd.github.io/lightbenchmark/demo/)を閲覧できます。デモは参考実装で、LLMの成績には含めません。
+
+## 外部で生成した回答を追加する
+
+LLMの呼び出しを別の環境で行う場合は、4課題の回答JSONを取り込みます。APIキーなし・ネットワーク呼び出しなしで採点と記録ができます。
+
+```sh
+npm run benchmark:cohort
+npm run benchmark:import -- --responses work/model-responses.json --cohort results/cohorts/<id>.json
+npm run build
+```
+
+JSONの形式と手順は [外部回答の取り込み](docs/EXTERNAL_RESULTS.md)。生成条件は申告として記録し、日本語の原文と提出コードをそのまま保持します。
+
+## 任意：このリポジトリからモデルを呼び出す
 
 全モデルで共通の条件ファイルを作り、表示されたパスを各実行へ渡します。1モデルにつき4回の新規会話、コード課題は同じ3条件で検証します。
 

@@ -53,4 +53,6 @@ jobs:
           curl --fail --location --retry 10 --retry-delay 3 "${root}"
           curl --fail --location --retry 10 --retry-delay 3 "${root}archive/models/gpt-5.6-luna/"
           curl --fail --location --retry 10 --retry-delay 3 "${root}data/runs.json"
+          curl --fail --location --retry 10 --retry-delay 3 --output /dev/null "${root}demo/"
+          curl --fail --location --retry 10 --retry-delay 3 --output /dev/null "${root}vendor/planck.mjs"
           curl --fail --location --retry 10 --retry-delay 3 --output /dev/null "${root}assets/emscripten-module.wasm"

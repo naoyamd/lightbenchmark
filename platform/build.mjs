@@ -44,28 +44,32 @@ export function validateRun(run) {
   }
   return run;
 }
-export async function buildPlatform(){
-  const dist=path.join(root,'dist');
-  await rejectLinks(dist);await rejectLinks(path.join(root,'results'));
+export async function buildPlatform({resultsDir=path.join(root,'results'),distDir=path.join(root,'dist')}={}){
+  const dist=path.resolve(distDir),records=path.resolve(resultsDir),relative=path.relative(root,dist);
+  if(relative!=='dist'&&!relative.startsWith('work'+path.sep))throw new Error('Build output must be dist/ or a directory inside work/');
+  if(records===dist||records.startsWith(dist+path.sep)||dist.startsWith(records+path.sep))throw new Error('Build output must not overlap results');
+  await rejectLinks(dist);await rejectLinks(records);
   await buildSite({distDir:path.join(dist,'archive')});
   await cp(path.join(root,'platform/site'),dist,{recursive:true});
+  await cp(path.join(root,'platform/demo'),path.join(dist,'demo'),{recursive:true});
+  await cp(path.join(root,'platform/vendor'),path.join(dist,'vendor'),{recursive:true});
   await mkdir(path.join(dist,'assets'),{recursive:true});await mkdir(path.join(dist,'data'),{recursive:true});
   await build({entryPoints:[path.join(root,'platform/browser-worker.mjs')],bundle:true,format:'esm',platform:'browser',target:'es2022',outfile:path.join(dist,'assets/browser-worker.mjs'),minify:true});
   await cp(fileURLToPath(import.meta.resolve('@jitl/quickjs-wasmfile-release-sync/wasm')),path.join(dist,'assets/emscripten-module.wasm'));
   await cp(path.join(root,'platform/vendor/PLANCK-LICENSE.txt'),path.join(dist,'assets/PLANCK-LICENSE.txt'));
   await cp(fileURLToPath(import.meta.resolve('quickjs-emscripten/package.json')).replace(/package\.json$/,'LICENSE'),path.join(dist,'assets/QUICKJS-LICENSE.txt'));
   const reviews=[];
-  for(const entry of await readdir(path.join(root,'results/reviews'),{withFileTypes:true}).catch(error=>{if(error.code==='ENOENT')return [];throw error;})){
+  for(const entry of await readdir(path.join(records,'reviews'),{withFileTypes:true}).catch(error=>{if(error.code==='ENOENT')return [];throw error;})){
     if(!entry.isFile()||entry.isSymbolicLink()||!entry.name.endsWith('.json'))throw new Error('Invalid review entry');
-    const review=await readRecord(path.join(root,'results/reviews',entry.name));validateReview(review);reviews.push(review);
+    const review=await readRecord(path.join(records,'reviews',entry.name));validateReview(review);reviews.push(review);
   }
   const runs=[];
-  for(const entry of await readdir(path.join(root,'results/runs'),{withFileTypes:true}).catch(error=>{if(error.code==='ENOENT')return [];throw error;})){
+  for(const entry of await readdir(path.join(records,'runs'),{withFileTypes:true}).catch(error=>{if(error.code==='ENOENT')return [];throw error;})){
     if(!entry.isDirectory()||entry.isSymbolicLink())throw new Error('Run entries must be ordinary directories');
-    let run;try{run=await readRecord(path.join(root,'results/runs',entry.name,'run.json'));}catch(error){if(error.code==='ENOENT')continue;throw error;}
+    let run;try{run=await readRecord(path.join(records,'runs',entry.name,'run.json'));}catch(error){if(error.code==='ENOENT')continue;throw error;}
     validateRun(run);if(run.id!==entry.name)throw new Error('Run directory mismatch');
     if(!/^v2-[\w-]+$/.test(run.cohortId))throw new Error('Invalid cohort ID');
-    const cohort=await readRecord(path.join(root,'results/cohorts',run.cohortId+'.json'));
+    const cohort=await readRecord(path.join(records,'cohorts',run.cohortId+'.json'));
     if(cohort.conditionHash!==conditionHash(cohort)||run.conditionHash!==cohort.conditionHash||run.evaluatorHash!==cohort.evaluatorHash||JSON.stringify(run.limits)!==JSON.stringify(cohort.limits)||JSON.stringify(run.seeds)!==JSON.stringify(cohort.seeds))throw new Error('Run conditions do not match the committed cohort');
     for(const task of TASK_IDS){
       if(hash(run.tasks[task].prompt)!==hash(cohort.prompts[task]))throw new Error('Run prompt does not match cohort');

@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createCandidate} from './runtime.mjs';
 import {evaluateIsolated} from './evaluate-node.mjs';
-import {requestCompletion,extractSource,createCohort,runModel} from './run.mjs';
+import {requestCompletion,extractSource,createCohort,runModel,importResponses} from './run.mjs';
 import {animationKeyframes,getMoveGeometry,TOKENS} from './site/cube-view.mjs';
-import {readFile,mkdtemp,rm} from 'node:fs/promises';
+import {readFile,mkdtemp,rm,mkdir} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {validateRun} from './build.mjs';
+import {validateRun,buildPlatform} from './build.mjs';
 import {validateReview} from './reviews.mjs';
 
 test('isolated candidate has no host capabilities, rejects imports and mutation, and disposes',async()=>{
@@ -90,4 +91,24 @@ test('a four-task run saves raw responses, independent failures and immutable co
   const altered=structuredClone(cohort);altered.seeds[0]^=1;await assert.rejects(runModel({model:'test',cohort:altered,provider:'compatible'}),/cohort/);
   assert.throws(()=>validateReview({runId:run.id,reviewer:'test',notes:'根拠',naturalness:6,gyaru:3,factuality:3}),/1–5/);
  }finally{if(previous===undefined)delete process.env.LIGHTBENCH_API_KEY;else process.env.LIGHTBENCH_API_KEY=previous;if(!path.resolve(directory).startsWith(path.resolve(prefix)))throw new Error('Unsafe test cleanup path');await rm(directory,{recursive:true,force:true,maxRetries:3});}
+});
+test('external outputs reach the published data without credentials or network calls',async()=>{
+ const work=fileURLToPath(new URL('../work/',import.meta.url));await mkdir(work,{recursive:true});
+ const directory=await mkdtemp(path.join(work,'import-test-')),records=path.join(directory,'results'),dist=path.join(directory,'site');
+ const originalFetch=globalThis.fetch,previousKey=process.env.LIGHTBENCH_API_KEY;
+ try{
+  delete process.env.LIGHTBENCH_API_KEY;globalThis.fetch=()=>{throw new Error('External import attempted a network call');};
+  const cohort=await createCohort(path.join(records,'cohorts'));
+  const bundle={model:'PRIVATE TEST FIXTURE',conditionHash:cohort.conditionHash,tasks:Object.fromEntries(['chat','puyo','cube','arm'].map(task=>[task,{text:task==='chat'?'  外部の原文✨\n':'export {}'}]))};
+  await assert.rejects(importResponses({bundle:{...bundle,conditionHash:'wrong'},cohort,resultsDir:path.join(records,'runs')}),/conditionHash/);
+  await assert.rejects(importResponses({bundle:{...bundle,tasks:{...bundle.tasks,chat:{text:'x',usage:{costUsd:-1}}}},cohort,resultsDir:path.join(records,'runs')}),/costUsd/);
+  const run=await importResponses({bundle,cohort,resultsDir:path.join(records,'runs')});
+  validateRun(run);assert.equal(run.policy,'external-output');assert.equal(run.tasks.chat.response.text,'  外部の原文✨\n');assert.equal(run.tasks.chat.response.usage.totalTokens,null);
+  for(const task of ['puyo','cube','arm'])assert.equal(run.tasks[task].status,'candidate-fail');
+  await buildPlatform({resultsDir:records,distDir:dist});
+  const manifest=JSON.parse(await readFile(path.join(dist,'data/runs.json'),'utf8'));assert.equal(manifest.runs.length,1);assert.equal(manifest.runs[0].model,bundle.model);
+  const published=JSON.parse(await readFile(path.join(dist,manifest.runs[0].path),'utf8'));assert.equal(published.tasks.chat.response.text,bundle.tasks.chat.text);
+  assert.match(await readFile(path.join(dist,'demo/index.html'),'utf8'),/LLM未実行/);
+  assert.ok(manifest.runs.every(r=>!r.model.includes('モデル A')));
+ }finally{globalThis.fetch=originalFetch;if(previousKey===undefined)delete process.env.LIGHTBENCH_API_KEY;else process.env.LIGHTBENCH_API_KEY=previousKey;if(!path.resolve(directory).startsWith(path.join(work,'import-test-')))throw new Error('Unsafe test cleanup');await rm(directory,{recursive:true,force:true,maxRetries:3});}
 });
