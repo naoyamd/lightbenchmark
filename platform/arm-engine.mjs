@@ -302,13 +302,14 @@ export function simulateArm(seed, controller) {
       try {
         command = controller.call('step', { t: frame.t, q, dq, tool: frame.tool, toolVelocity: [toolVelocity.x,toolVelocity.y], palmAngle: frame.palm.angle, gripperOpening: frame.gripperOpening, blocks, contacts: frame.contacts, stackCount: count, stableSeconds: frame.stableSeconds }, .02);
         if (!command || !Array.isArray(command.jointSpeeds) || command.jointSpeeds.length !== 3 || !command.jointSpeeds.every(Number.isFinite) || !Number.isFinite(command.gripperOpening)) throw new Error('step must return finite jointSpeeds[3] and gripperOpening');
+        if(command.jointSpeeds.some((speed,i)=>Math.abs(speed)>caps[i])||command.gripperOpening<0||command.gripperOpening>.6)throw new Error('Motor action exceeds the specified speed or gripper limits');
       } catch (error) { failedReason = error.message; frame.phase = 'FAILED'; }
     }
     if (tick % SAMPLE_EVERY === 0 || failedReason || completionTime !== null || tick === params.duration / DT) frames.push(frame);
     if (failedReason || completionTime !== null || tick === params.duration / DT) break;
-    sim.joints.forEach((joint,i) => joint.setMotorSpeed(clamp(command.jointSpeeds[i], -caps[i],caps[i])));
+    sim.joints.forEach((joint,i) => joint.setMotorSpeed(command.jointSpeeds[i]));
     for (const finger of sim.fingers) {
-      const desired = finger.side * (clamp(command.gripperOpening,0,.6) + FINGER_WIDTH) / 2;
+      const desired = finger.side * (command.gripperOpening + FINGER_WIDTH) / 2;
       const measured = finger.initialOffset + finger.joint.getJointTranslation();
       finger.joint.setMotorSpeed(clamp(5 * (desired - measured),-.14,.14));
     }

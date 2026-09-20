@@ -23,7 +23,7 @@ export animate(move,t): {axis:0|1|2,layer:-1|1,angle:ラジアン}。tは0〜1�
   arm: { system: coding, user: `物理シミュレーション内の3関節ロボットアームをフィードバック制御してください。左側にある3箱を指でつかみ、仕切りを越えて右の台へ運び、下から中→小→大に積みます。手を離して退避し、3秒安定すれば成功。箱の位置や成否を直接変更できません。重力・接触・摩擦が働き、箱と指を固定する機能はありません。
 export reset(config): 内部状態を初期化（戻り値は任意）。configはseed,base:[x,y],lengths:[1.9,1.85,.26],tableY:.25,stackX:1.5,barrier:{x:.75,y:.25,width:.16,height:.42},blocks:[{id,label,order,width,height,mass,initial:[x,y]}],goalSlots:[{id,x,y,width,height}],duration:65。
 箱はmedium .28×.22m/.55kg、small .19×.16m/.35kg、large .38×.26m/.85kg。この順に積む。初期x配置をseedで変えます。yは上向き。肩baseは[-1.8,.4]。q[0]は肩の世界角、q[1]は肘の相対角、q[2]は手首の相対角。手首先に長さ.26mの手のひら、さらに.18m延長した場所に2本の指。toolは指の間の世界座標。手首の世界角=-π/2で指が下向き。
-export step(obs,dt): {jointSpeeds:[3個のrad/s],gripperOpening:指の内側の間隔m}。50Hzで呼出し、dt=.02。速度上限は[1.1,1.1,4]、モータートルク上限[90,80,45]N·m。指の開きは0〜.6m、閉じる速度は上限.14m/s、各指の最大力12N。目標位置や角度を返すAPIではありません。
+export step(obs,dt): {jointSpeeds:[3個のrad/s],gripperOpening:指の内側の間隔m}。50Hzで呼出し、dt=.02。速度指令の絶対値上限は[1.1,1.1,4]、モータートルク上限[90,80,45]N·m。指の開きは0〜.6m。指令がこの範囲を超えた場合は失敗です。閉じる速度は上限.14m/s、各指の最大力12N。目標位置や角度を返すAPIではありません。
 obsは{t,q:[3],dq:[3],tool:[x,y],toolVelocity:[vx,vy],palmAngle,gripperOpening,blocks:[{id,x,y,angle,vx,vy,angularVelocity}],contacts:["tag|tag"],stackCount,stableSeconds}。接触tagはblock-medium/block-small/block-large,finger-left/finger-right,table,barrierなどを辞書順で結合した文字列。手の位置・箱の寸法・実際の支持高さを観測して制御してください。
 物理は200Hzで進みます。最大65秒。順序と接触による支持、姿勢、静止、指から離れていること、手の退避を共通評価器が確認します。達成段数・落下・衝突・時間も記録します。` },
 };

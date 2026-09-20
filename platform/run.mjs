@@ -6,7 +6,10 @@ import { VERSION, TASK_IDS, PROMPTS, LIMITS } from './prompts.mjs';
 import { evaluateIsolated } from './evaluate-node.mjs';
 
 export const hash = value => createHash('sha256').update(typeof value==='string'?value:JSON.stringify(value)).digest('hex');
-const save = (file,value) => writeFile(file,JSON.stringify(value,null,2)+'\n',{flag:'wx'});
+const save = async (file,value) => {
+  try {await writeFile(file,JSON.stringify(value,null,2)+'\n',{flag:'wx'});}
+  catch(error){error.checkpointFailure=true;throw error;}
+};
 export async function evaluatorHash(){
   const files=['runtime.mjs','evaluate.mjs','evaluate-node.mjs','node-worker.mjs','arm-engine.mjs','vendor/planck.mjs','site/cube-view.mjs','../evaluator/cube.mjs','../evaluator/puyo.mjs','../package-lock.json'];
   return hash(await Promise.all(files.map(async file=>[file,hash((await readFile(new URL(file,import.meta.url),'utf8')).replace(/\r\n/g,'\n'))])));
@@ -74,16 +77,20 @@ export async function runModel({model,cohort,provider='go',baseUrl,protocol,resu
     const prompt=cohort.prompts[task],taskRecord={prompt,promptHash:hash(prompt),status:'infra-error',response:null,source:null,trials:[]};
     try {
       taskRecord.response=await request({baseUrl,apiKey,model:modelId,prompt,protocol,maxTokens:cohort.limits.maxOutputTokens,timeoutMs:cohort.limits.requestTimeoutMs});
+      // Keep the paid response even if the process is interrupted during evaluation.
+      await save(path.join(directory,task+'-response.json'),taskRecord.response);
       if(task==='chat'){taskRecord.status=taskRecord.response.text.trim()?'unrated':'candidate-fail';taskRecord.characterCount=[...taskRecord.response.text].length;}
       else {
         taskRecord.source=extractSource(taskRecord.response.text);taskRecord.sourceHash=hash(taskRecord.source);
         for(const seed of cohort.seeds){
           console.log(`${id} ${task}: evaluating seed ${seed}`);
-          taskRecord.trials.push(await evaluateIsolated(task,taskRecord.source,seed));
+          const trial=await evaluateIsolated(task,taskRecord.source,seed);
+          await save(path.join(directory,`${task}-seed-${seed}.json`),trial);
+          taskRecord.trials.push(trial);
         }
         taskRecord.status=taskRecord.trials.some(t=>t.status==='infra-error')?'infra-error':taskRecord.trials.every(t=>t.status==='pass')?'pass':taskRecord.trials.some(t=>t.passed>0)?'partial':'candidate-fail';
       }
-    } catch(error){taskRecord.status=taskRecord.response?'candidate-fail':'infra-error';taskRecord.error=String(error.message).replaceAll(apiKey,'[redacted]').slice(0,500);}
+    } catch(error){if(error.checkpointFailure)throw error;taskRecord.status=taskRecord.response?'candidate-fail':'infra-error';taskRecord.error=String(error.message).replaceAll(apiKey,'[redacted]').slice(0,500);}
     await save(path.join(directory,task+'.json'),taskRecord);run.tasks[task]=taskRecord;
     console.log(`${id} ${task}: ${taskRecord.status}`);
   }

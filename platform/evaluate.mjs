@@ -9,6 +9,25 @@ const moves = [...'URFDLB'].flatMap(face=>['',"'",'2'].map(s=>face+s));
 const specs = {U:[1,1,-1],R:[0,1,-1],F:[2,1,-1],D:[1,-1,1],L:[0,-1,1],B:[2,-1,1]};
 const stateArray = state => Array.from(state);
 function assert(value,message) { if(!value) throw new Error(message); }
+function assertResolution(actual,expected){
+  assert(actual && equal(actual.finalBoard,expected.finalBoard) && actual.chainCount===expected.chainCount,'resolve differs from independent evaluator');
+  assert(Array.isArray(actual.steps) && actual.steps.length===expected.steps.length,'Missing clear/fall steps');
+  for(let i=0;i<expected.steps.length;i++){
+    const a=actual.steps[i],e=expected.steps[i];
+    assert(equal(a?.boardAfter,e.boardAfter) && equal([...(a?.cleared??[])].sort(),[...e.cleared].sort()),`Incorrect chain step ${i+1}`);
+  }
+}
+function unknownBoards(seed){
+  let state=(seed^0x3965b2d1)>>>0||1;
+  const random=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return state>>>0;};
+  return Array.from({length:4},()=>{
+    const board=emptyBoard();
+    for(let x=0;x<6;x++){const height=3+random()%8;for(let y=0;y<height;y++)board[y][x]=1+random()%4;}
+    const x=random()%5,color=1+random()%4;
+    for(let y=0;y<2;y++){board[y][x]=color;board[y][x+1]=color;}
+    return board;
+  });
+}
 function algorithm(value,max=300) {
   assert(Array.isArray(value) && value.length <= max && value.every(m=>moves.includes(m)), 'Expected a legal move array');
   return value;
@@ -32,8 +51,7 @@ export async function evaluate(task, source, seed) {
       for(let x=0;x<4;x++)test[0][x]=color;
       test[2][4]=1; test[3][4]=2;
       check('消去・重力',()=>{
-        const expected=puyo.resolve(test),actual=candidate.call('resolve',test);
-        assert(actual && equal(actual.finalBoard,expected.finalBoard) && actual.chainCount===expected.chainCount,'resolve differs from independent evaluator');
+        for(const board of [test,...unknownBoards(seed)])assertResolution(candidate.call('resolve',board),puyo.resolve(board));
       });
       check('合法配置・範囲外',()=>{
         for(const pair of [{x:seed%5,rotation:1,colors:[color,2]},{x:5,rotation:1,colors:[1,2]},{x:2,rotation:2,colors:[2,3]}]){
@@ -57,11 +75,9 @@ export async function evaluate(task, source, seed) {
           if(index<35){assert(result.chainCount===0,`Premature clear at pair ${index+1}`);setupPairs.push(pair);}
           else {
             const actualResult=candidate.call('resolve',board);
-            assert(actualResult?.chainCount===result.chainCount && equal(actualResult.finalBoard,result.finalBoard),'Candidate chain result is incorrect');
-            assert(Array.isArray(actualResult.steps) && actualResult.steps.length===result.steps.length,'Missing clear/fall steps');
+            assertResolution(actualResult,result);
             for(let i=0;i<result.steps.length;i++){
-              const a=actualResult.steps[i],e=result.steps[i];
-              assert(equal(a?.boardAfter,e.boardAfter) && equal([...(a?.cleared??[])].sort(),[...e.cleared].sort()),`Incorrect chain step ${i+1}`);
+              const e=result.steps[i];
               frames.push({board:e.boardAfter,phase:'chain',chain:i+1,cleared:e.cleared,placed:null});
             }
             chainCount=result.chainCount;allClear=result.finalBoard.flat().every(n=>n===0);

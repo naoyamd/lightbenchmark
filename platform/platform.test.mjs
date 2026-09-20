@@ -40,6 +40,20 @@ test('the published arm action/observation contract can physically complete all 
   assert.ok(!final.contacts.some(c=>c.includes('finger-')&&c.includes('block-')));
  }
 });
+test('puyo must resolve unseen boards, not only a small probe and its own full plan',async()=>{
+ const oracle=await readFile(new URL('../evaluator/puyo.mjs',import.meta.url),'utf8');
+ const general=await evaluateIsolated('puyo',oracle,97);
+ assert.equal(general.checks.find(c=>c.name==='消去・重力').passed,true);
+ const restricted=oracle.replace('export function resolve(board)','function fullResolve(board)')+'\nexport function resolve(board){const n=board.flat().filter(Boolean).length;return n<=6||n===72?fullResolve(board):{finalBoard:board,chainCount:0,steps:[]}}';
+ const result=await evaluateIsolated('puyo',restricted,97);
+ assert.equal(result.checks.find(c=>c.name==='消去・重力').passed,false);
+});
+test('out-of-range finite robot commands fail before they move the plant',async()=>{
+ for(const command of [{jointSpeeds:[1e300,0,0],gripperOpening:.5},{jointSpeeds:[0,0,0],gripperOpening:.61}]){
+  const result=await evaluateIsolated('arm',`export function reset(){};export function step(){return ${JSON.stringify(command)}}`,1);
+  assert.equal(result.status,'candidate-fail');assert.equal(result.replay.frames.length,1);assert.match(result.replay.metrics.failedReason,/exceeds/);
+ }
+});
 test('candidate animation samples drive the actual CSS keyframes for all moves',()=>{
  for(const move of TOKENS){const geometry=getMoveGeometry(move);const angle=geometry.cssAngle*Math.PI/180*(geometry.axis===1?1:-1);const poses=[0,.1,.45,.8,1].map(f=>({axis:geometry.axis,layer:geometry.layer,angle:angle*f}));
  const frames=animationKeyframes(move,poses);assert.equal(frames.length,5);assert.match(frames[2].transform,new RegExp(String(geometry.cssAngle*.45).replace('.','\\.')));
@@ -69,6 +83,8 @@ test('a four-task run saves raw responses, independent failures and immutable co
   const run=await runModel({provider:'compatible',model:'test-fixture',baseUrl:'https://example.test/v1',cohort,resultsDir:path.join(directory,'runs'),request:async({prompt})=>{calls++;return {text:prompt.user==='ギャルっぽく糸島を紹介して'?'  原文のまま✨\n':'export function reset(){};export function step(){return {jointSpeeds:[0,0,0],gripperOpening:.58}}',usage:{totalTokens:1,costUsd:null}};}});
   assert.equal(calls,4);assert.equal(run.tasks.chat.response.text,'  原文のまま✨\n');assert.equal(run.tasks.arm.status,'candidate-fail');assert.equal(run.tasks.arm.trials.length,3);validateRun(run);
   const saved=JSON.parse(await readFile(path.join(directory,'runs',run.id,'run.json'),'utf8'));assert.deepEqual(saved,run);
+  assert.deepEqual(JSON.parse(await readFile(path.join(directory,'runs',run.id,'arm-response.json'),'utf8')),run.tasks.arm.response);
+  assert.deepEqual(JSON.parse(await readFile(path.join(directory,'runs',run.id,`arm-seed-${cohort.seeds[0]}.json`),'utf8')),run.tasks.arm.trials[0]);
   const invalid=structuredClone(run);invalid.tasks.arm.status='pass';assert.throws(()=>validateRun(invalid),/score/);
   for(const trial of invalid.tasks.arm.trials){trial.checks=[];trial.passed=0;trial.total=0;trial.status='pass';}assert.throws(()=>validateRun(invalid),/score/);
   const altered=structuredClone(cohort);altered.seeds[0]^=1;await assert.rejects(runModel({model:'test',cohort:altered,provider:'compatible'}),/cohort/);

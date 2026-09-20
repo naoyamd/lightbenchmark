@@ -46,6 +46,8 @@ npm run benchmark:run -- --provider compatible --model your-model-id --cohort re
 
 `results/runs/<実行ID>/` に要求本文、返答原文、提出コード、usage、各条件の判定と再生ログを保存します。既存記録は上書きせず、取得できない費用やtokenは `null`。生成時間と評価器の実行時間は別々に記録します。
 
+APIの返答は評価を始める前に `*-response.json` へ保存し、各条件の結果も逐次保存します。途中で停止しても、受け取り済みの回答と完了した評価は残ります。
+
 日本語カードの「日本語を評価」で評価JSONを保存し、取り込めます。
 
 ```sh
